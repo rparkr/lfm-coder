@@ -1,0 +1,14 @@
+# Virtual environment
+.venv/
+
+# Datasets
+data/
+
+# Byte-compiled / optimized
+**/__pycache__/
+
+# Tests
+**/.pytest_cache/**
+
+# Ruff
+**/.ruff_cache/
