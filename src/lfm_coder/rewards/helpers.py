@@ -8,7 +8,7 @@ libraries).
 I based these functions on the ones used in HumanEval+ and MBPP+ for compatibility.
 """
 
-from typing import Any
+from typing import Any, TypeGuard, cast
 
 
 def is_float(value: str | list[str] | None, require_all: bool = True) -> bool:
@@ -38,8 +38,8 @@ def is_float(value: str | list[str] | None, require_all: bool = True) -> bool:
 
 
 def is_close(
-    a: int | float | list[int | float],
-    b: int | float | list[int | float],
+    result: int | float | list[int | float],
+    expected: int | float | list[int | float],
     abs_tol: float = 1e-6,
     rel_tol: float = 1e-7,
 ) -> bool:
@@ -51,12 +51,12 @@ def is_close(
     - [MBPP+](https://huggingface.co/datasets/evalplus/mbppplus)
 
     Args:
-        a: The first value or list to compare.
-        b: The second value or list to compare.
+        result: The result from the code.
+        expected: The expected value (i.e., "ground truth") to compare to the result.
         abs_tol: The minimum absolute tolerance - useful for comparisons
             near zero. Defaults to 1e-6.
         rel_tol: The relative tolerance - the maximum allowed difference
-            relative to the larger absolute value of a or b.
+            relative to the larger absolute value of `result` or `expected`.
             Defaults to 1e-7.
 
     Returns:
@@ -66,45 +66,47 @@ def is_close(
         ValueError: If both inputs are lists but have different lengths.
     """
     # Handle sets: sort elements and convert to lists
-    if isinstance(a, set):
-        a = sorted(a)
-    if isinstance(b, set):
-        b = sorted(b)
+    if isinstance(result, set):
+        result = sorted(result)
+    if isinstance(expected, set):
+        expected = sorted(expected)
 
     # Check if the inputs are sequences
-    a_is_seq = isinstance(a, (list, tuple))
-    b_is_seq = isinstance(b, (list, tuple))
+    def is_sequence(value: Any) -> TypeGuard[list[int | float] | tuple[int | float]]:
+        return isinstance(value, (list, tuple))
 
     # Case 1: Both are sequences
-    if a_is_seq and b_is_seq:
-        if len(a) != len(b):
+    if is_sequence(result) and is_sequence(expected):
+        if len(result) != len(expected):
             raise ValueError("Lists must have the same length.")
-        return all(is_close(ai, bi, rel_tol, abs_tol) for ai, bi in zip(a, b))
+        return all(
+            is_close(ai, bi, rel_tol, abs_tol) for ai, bi in zip(result, expected)
+        )
 
     # Case 2: One is a sequence, the other is a scalar
-    if a_is_seq:
-        return all(is_close(ai, b, rel_tol, abs_tol) for ai in a)
+    if is_sequence(result):
+        return all(is_close(ai, expected, rel_tol, abs_tol) for ai in result)
 
-    if b_is_seq:
-        return all(is_close(a, bi, rel_tol, abs_tol) for bi in b)
+    if is_sequence(expected):
+        return all(is_close(result, bi, rel_tol, abs_tol) for bi in expected)
 
     # Both are scalars; compute the difference
     # Handle infinite values (-inf and inf)
-    if a == b:
+    if result == expected:
         return True
 
-    a, b = float(a), float(b)
+    result, expected = cast(float, result), cast(float, expected)
 
-    diff = abs(a - b)
+    diff = abs(result - expected)
 
-    return diff <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+    return diff <= max(rel_tol * max(abs(result), abs(expected)), abs_tol)
 
 
 def is_correct(
-    output_value: Any, expected_value: Any, abs_tol: float = 0.0, rel_tol: float = 1e-7
+    result_value: Any, expected_value: Any, abs_tol: float = 0.0, rel_tol: float = 1e-7
 ) -> bool:
     """
-    Determine whether the output value is correct by comparing it to the expected value.
+    Determine whether the result value is correct by comparing it to the expected value.
 
     For floats (or structures containing floats), uses is_close for comparison with tolerance.
     For other types, uses direct equality (==). Handles mixed-type lists recursively.
@@ -115,31 +117,31 @@ def is_correct(
     # Handle sets: sort elements and convert to lists for comparison
     if isinstance(expected_value, set):
         expected_value = sorted(expected_value)
-    if isinstance(output_value, set):
-        output_value = sorted(output_value)
+    if isinstance(result_value, set):
+        result_value = sorted(result_value)
 
     # Check if the inputs are sequences
     expected_is_seq = isinstance(expected_value, (list, tuple))
-    output_is_seq = isinstance(output_value, (list, tuple))
+    result_is_seq = isinstance(result_value, (list, tuple))
 
     # Case 1: Both are sequences -> recurse on elements
-    if expected_is_seq and output_is_seq:
-        if len(expected_value) != len(output_value):
+    if expected_is_seq and result_is_seq:
+        if len(expected_value) != len(result_value):
             return False
         return all(
-            is_correct(o, e, abs_tol, rel_tol)
-            for o, e in zip(output_value, expected_value)
+            is_correct(out, exp, abs_tol, rel_tol)
+            for out, exp in zip(result_value, expected_value)
         )
 
     # Case 2: One is a sequence, the other is not -> type mismatch
-    if expected_is_seq or output_is_seq:
+    if expected_is_seq or result_is_seq:
         return False
 
     # Case 3: Both are scalars -> decide based on expected_value type
     if is_float(expected_value):
-        return is_close(output_value, expected_value, abs_tol=abs_tol, rel_tol=rel_tol)
+        return is_close(result_value, expected_value, abs_tol=abs_tol, rel_tol=rel_tol)
     else:
-        return output_value == expected_value
+        return result_value == expected_value
 
 
 def pass_rate(test_results: list[bool]) -> float:

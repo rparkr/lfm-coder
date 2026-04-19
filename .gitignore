@@ -1,5 +1,6 @@
-# Virtual environment
+# Environment setup
 .venv/
+.env
 
 # Datasets
 data/
@@ -8,7 +9,23 @@ data/
 **/__pycache__/
 
 # Tests
-**/.pytest_cache/**
+**/.pytest_cache/
 
 # Ruff
 **/.ruff_cache/
+
+# Logs
+logs.jsonl
+
+# IDE settings
+.vscode/
+
+# Source distribution and binary artifacts
+dist/
+
+# OpenSpec skills
+# These are not specific to this repository, but rather are generated
+# by `openspec init --tools "antigravity,claude"`, so they don't need to be checked into
+# source control.
+.agent/skills/openspec*
+.claude/skills/openspec*

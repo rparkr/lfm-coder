@@ -1,223 +1,119 @@
-"""Unit tests for the PythonSandbox class."""
+"""Unit tests for the Sandbox class (unified interface)."""
 
-import pytest
-import pydantic_monty
+import textwrap
 
-from lfm_coder.sandbox import PythonSandbox, SandboxOutput
+from lfm_coder.sandbox import Sandbox, SandboxExecution, SandboxType
 
 
-class TestPythonSandbox:
-    """Test cases for the PythonSandbox class."""
+class TestSandbox:
+    """Test cases for the unified Sandbox class with fallback logic."""
 
-    def test_basic_execution(self):
-        """Test basic code execution without inputs."""
-        sandbox = PythonSandbox("42")
-        result = sandbox.run()
+    def test_sandbox_monty_auto(self):
+        """Test that simple code runs in Monty by default."""
+        sandbox = Sandbox()
+        code = "print('Hello from Monty')\n1 + 2"
+        result = sandbox.run(code)
 
-        assert isinstance(result, SandboxOutput)
-        assert result.output == 42
-        assert result.print_statements == []
+        assert isinstance(result, SandboxExecution)
+        assert result.sandbox_type == SandboxType.MONTY
+        # Monty now appends repr(result) to stdout
+        assert "Hello from Monty\n3" in result.stdout
+        assert result.success is True
 
-    def test_code_with_print(self):
-        """Test code execution with print statements."""
-        sandbox = PythonSandbox('print("Hello, World!"); 42')
-        result = sandbox.run()
+    def test_sandbox_fallback_to_docker_classes(self):
+        """Test fallback to Docker for classes (unsupported by Monty)."""
+        sandbox = Sandbox()
+        code = textwrap.dedent("""
+            class MyClass:
+                def greet(self):
+                    return "Hello from Docker"
 
-        assert result.output == 42
-        assert result.print_statements == ["Hello, World!"]
+            obj = MyClass()
+            print(obj.greet())
+        """)
+        result = sandbox.run(code)
 
-    def test_code_with_multiple_prints(self):
-        """Test code execution with multiple print statements."""
-        sandbox = PythonSandbox('print("First"); print("Second"); 99')
-        result = sandbox.run()
+        assert isinstance(result, SandboxExecution)
+        assert result.sandbox_type == SandboxType.DOCKER
+        assert "Hello from Docker" in result.stdout
+        assert result.success is True
 
-        assert result.output == 99
-        assert result.print_statements == ["First", "Second"]
+    def test_sandbox_fallback_to_docker_dependencies(self):
+        """Test fallback to Docker for external dependencies."""
+        # Enable network so uv can fetch dependencies if needed
+        sandbox = Sandbox(disable_network=False)
+        code = textwrap.dedent("""
+            import json
+            import datetime
+            # This should still be Monty compatible
+            print("json and datetime are fine")
+        """)
+        result = sandbox.run(code)
+        assert result.sandbox_type == SandboxType.MONTY
 
-    def test_execution_with_inputs(self):
-        """Test code execution with input variables."""
-        sandbox = PythonSandbox("x + y", inputs=["x", "y"])
-        result = sandbox.run(x=5, y=10)
+        code_with_dep = textwrap.dedent("""
+            import numpy 
+            print("numpy imported")
+        """)
+        # numpy is not in Monty's allowed modules
+        result_dep = sandbox.run(code_with_dep)
+        assert result_dep.sandbox_type == SandboxType.DOCKER
 
-        assert result.output == 15
-        assert result.print_statements == []
+    def test_sandbox_batch(self):
+        """Test batch execution with mixed compatibility."""
+        sandbox = Sandbox()
+        code_list = [
+            "print('Task 1 - Monty')",
+            "class A: pass\nprint('Task 2 - Docker')",
+        ]
+        results = sandbox.run(code_list)
 
-    def test_execution_with_inputs_and_prints(self):
-        """Test code execution with inputs and print statements."""
-        sandbox = PythonSandbox('print(f"Sum: {x + y}"); x * y', inputs=["x", "y"])
-        result = sandbox.run(x=3, y=4)
+        assert isinstance(results, list)
+        assert len(results) == 2
 
-        assert result.output == 12
-        assert result.print_statements == ["Sum: 7"]
+        # Should be Monty
+        assert results[0].sandbox_type == SandboxType.MONTY
+        assert "Task 1 - Monty" in results[0].stdout
+        assert results[0].result is None
 
-    def test_input_validation_missing_input(self):
-        """Test that missing inputs raise ValueError."""
-        sandbox = PythonSandbox("x + 1", inputs=["x"])
+        # Should be Docker
+        assert results[1].sandbox_type == SandboxType.DOCKER
+        assert "Task 2 - Docker" in results[1].stdout
+        assert results[1].result is None
 
-        with pytest.raises(ValueError, match="Input mismatch"):
-            sandbox.run()
+    def test_explicit_sandbox_type(self):
+        """Test that explicit sandbox_type override works."""
+        sandbox = Sandbox()
+        code = "1 + 1"
 
-    def test_input_validation_extra_input(self):
-        """Test that extra inputs raise ValueError."""
-        sandbox = PythonSandbox("x + 1", inputs=["x"])
+        # Force Docker even if Monty compatible
+        result = sandbox.run(code, sandbox_type=SandboxType.DOCKER)
+        assert result.sandbox_type == SandboxType.DOCKER
 
-        with pytest.raises(ValueError, match="Input mismatch"):
-            sandbox.run(x=5, y=10)
+        # Force Monty
+        result_monty = sandbox.run(code, sandbox_type=SandboxType.MONTY)
+        assert result_monty.sandbox_type == SandboxType.MONTY
+        assert result_monty.result == 2
+        assert result_monty.stdout == "2"
 
-    def test_input_validation_wrong_input_names(self):
-        """Test that wrong input names raise ValueError."""
-        sandbox = PythonSandbox("x + 1", inputs=["x"])
+    def test_resource_override(self):
+        """Test override of resource limits in run()."""
+        sandbox = Sandbox(max_duration_sec=30)
+        code = "import time; time.sleep(2)"
 
-        with pytest.raises(ValueError, match="Input mismatch"):
-            sandbox.run(y=5)
+        # Override with very short timeout
+        result = sandbox.run(code, max_duration_sec=0.1)
+        assert result.timed_out is True
+        assert result.exit_code == 124
 
-    def test_memory_limit(self):
-        """Test memory limit enforcement."""
-        # Create a sandbox with very low memory limit (0.1 kB)
-        sandbox = PythonSandbox("[i for i in range(100)]", max_memory_mb=0.0001)
+    def test_overflow_prevention(self):
+        """Test that the Sandbox prevents the 65536 column overflow in Monty by falling back to Docker."""
+        sandbox = Sandbox()
+        # Line length > 65536
+        long_str = "a" * 70000
+        code = f's = "{long_str}"\nprint(len(s))'
 
-        with pytest.raises(pydantic_monty.MontyRuntimeError):
-            sandbox.run()
-
-    def test_time_limit(self):
-        """Test time limit enforcement."""
-        # Create a computationally intensive task with short time limit
-        sandbox = PythonSandbox("sum(range(10000000))", max_duration_secs=0.01)
-
-        with pytest.raises(
-            pydantic_monty.MontyRuntimeError, match="time limit exceeded"
-        ):
-            sandbox.run()
-
-    def test_allocation_limit(self):
-        """Test allocation limit enforcement."""
-        # Create code that does many allocations with low limit
-        sandbox = PythonSandbox(
-            "a=[1] * 100\nb=[2] * 100\nc=[3] * 100", max_allocations=2
-        )
-
-        with pytest.raises(pydantic_monty.MontyError):
-            sandbox.run()
-
-    def test_multiple_resource_limits(self):
-        """Test multiple resource limits together."""
-        sandbox = PythonSandbox(
-            "print('Test'); 42",
-            max_memory_mb=10,
-            max_duration_secs=1,
-            max_allocations=1000,
-        )
-        result = sandbox.run()
-
-        assert result.output == 42
-        assert result.print_statements == ["Test"]
-
-    def test_no_resource_limits(self):
-        """Test execution without any resource limits."""
-        sandbox = PythonSandbox("42")
-        result = sandbox.run()
-
-        assert result.output == 42
-        assert result.print_statements == []
-
-    def test_runtime_error_handling(self):
-        """Test that runtime errors are properly raised."""
-        sandbox = PythonSandbox("1 / 0")
-
-        with pytest.raises(pydantic_monty.MontyRuntimeError):
-            sandbox.run()
-
-    def test_syntax_error_handling(self):
-        """Test that syntax errors are caught during initialization."""
-        with pytest.raises(pydantic_monty.MontySyntaxError):
-            PythonSandbox("invalid syntax here +++")
-
-    def test_empty_code(self):
-        """Test execution of empty code."""
-        sandbox = PythonSandbox("")
-        result = sandbox.run()
-
-        # Empty code should return None or similar
-        assert result.output is None
-        assert result.print_statements == []
-
-    def test_code_returning_none(self):
-        """Test code that explicitly returns None."""
-        sandbox = PythonSandbox("None")
-        result = sandbox.run()
-
-        assert result.output is None
-        assert result.print_statements == []
-
-    def test_string_operations(self):
-        """Test string operations in sandbox."""
-        sandbox = PythonSandbox('"hello" + " world"')
-        result = sandbox.run()
-
-        assert result.output == "hello world"
-        assert result.print_statements == []
-
-    def test_list_operations(self):
-        """Test list operations in sandbox."""
-        sandbox = PythonSandbox("[1, 2, 3] + [4, 5]")
-        result = sandbox.run()
-
-        assert result.output == [1, 2, 3, 4, 5]
-        assert result.print_statements == []
-
-    def test_dict_operations(self):
-        """Test dictionary operations in sandbox."""
-        sandbox = PythonSandbox("{'a': 1, 'b': 2}")
-        result = sandbox.run()
-
-        assert result.output == {"a": 1, "b": 2}
-        assert result.print_statements == []
-
-    def test_function_definition_and_call(self):
-        """Test function definition and calling."""
-        sandbox = PythonSandbox("""
-def add(a, b):
-    return a + b
-
-add(5, 3)
-""")
-        result = sandbox.run()
-
-        assert result.output == 8
-        assert result.print_statements == []
-
-    def test_complex_expression(self):
-        """Test complex expressions."""
-        sandbox = PythonSandbox("""
-x = 10
-y = 20
-z = x * y + 5
-print(f"Result: {z}")
-z
-""")
-        result = sandbox.run()
-
-        assert result.output == 205
-        assert result.print_statements == ["Result: 205"]
-
-    def test_input_with_complex_types(self):
-        """Test inputs with complex data types."""
-        sandbox = PythonSandbox(
-            """
-print(f"List length: {len(data)}")
-sum(data)
-""",
-            inputs=["data"],
-        )
-        result = sandbox.run(data=[1, 2, 3, 4, 5])
-
-        assert result.output == 15
-        assert result.print_statements == ["List length: 5"]
-
-    def test_print_with_newlines(self):
-        """Test print statements with newlines."""
-        sandbox = PythonSandbox('print("Line 1\\nLine 2"); 42')
-        result = sandbox.run()
-
-        assert result.output == 42
-        assert result.print_statements == ["Line 1\nLine 2"]
+        result = sandbox.run(code)
+        assert result.success is True
+        assert result.stdout == "70000"
+        assert result.sandbox_type == SandboxType.DOCKER

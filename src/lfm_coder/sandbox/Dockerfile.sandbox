@@ -1,0 +1,13 @@
+FROM python:3.14-slim
+
+# Install the uv binary for package management. See: https://docs.astral.sh/uv/guides/integration/docker/#installing-uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+ENV PATH="/bin:${PATH}"
+ENV UV_CACHE_DIR="/root/.cache/uv"
+ENV UV_LINK_MODE=copy
+# Have uv compile packages to .pyc Python bytecode at installation time, improving
+# application runtime performance
+ENV UV_COMPILE_BYTECODE=1
+
+WORKDIR /sandbox

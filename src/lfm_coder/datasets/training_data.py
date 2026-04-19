@@ -1,24 +1,25 @@
+import json
 import os
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Any, Literal, cast
 
 import datasets
-import pydantic_monty
 from tqdm import tqdm
 
 from lfm_coder.logging_utils import get_logger
 from lfm_coder.rewards.helpers import pass_rate
-from lfm_coder.sandbox import PythonSandbox
+from lfm_coder.sandbox import Sandbox, SandboxExecution, SandboxType
 
 SEED: int = int(os.getenv("RANDOM_SEED", "12"))
 TRAINING_DATASET_NAME = "OpenCoder-LLM/opc-sft-stage2"
 TRAINING_DATASET_SPLIT = "educational_instruct"
+SAVED_DATASET_PATH = Path(__file__).parent.parent.parent.parent / "data/training"
 ADDITIONAL_INSTRUCTIONS = textwrap.dedent(
     """
     When writing your code, use only standard Python with no external libraries or
-    built-in modules except for `sys`, `os`, `typing`, `asyncio`, and `re` if needed.
+    built-in modules except for `asyncio.gather`, `dataclasses`, `datetime`, `json`, `math`, `os`, `re`, `sys`, and `typing`.
 
     Name the function `{function_name}`.
 
@@ -27,7 +28,7 @@ ADDITIONAL_INSTRUCTIONS = textwrap.dedent(
     # Your code here
     ```
     """
-)
+).strip()
 
 
 logger = get_logger(__name__)
@@ -41,14 +42,19 @@ class TestFormatVerification:
     Atributes:
     overall_pass_rate: The overall pass rate across all examples in the dataset.
     test_level_pass_rate: The pass rate for each individual test case across all
-    examples in the dataset.
+        examples in the dataset.
     test_results: A list of dictionaries containing the pass/fail results for each test case in each example.
+    monty_count: The number of examples that were run in the Monty sandbox.
+    docker_count: The number of examples that were run in the Docker sandbox.
+    skipped_examples: A list of dictionaries containing the examples that were skipped.
     """
 
     overall_pass_rate: float
     test_level_pass_rate: float
-    test_results: list[dict[str, list[bool]]]
-    skipped_examples: list[dict[str, str]] = None
+    test_results: list[dict[str, Any]]
+    monty_count: int = 0
+    docker_count: int = 0
+    skipped_examples: list[dict[str, Any]] | None = None
 
 
 class TrainingDataset:
@@ -69,9 +75,7 @@ class TrainingDataset:
         self.seed = seed
         self.num_samples = num_samples
         self.dataset_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "data/training_dataset"
-            / f"seed_{self.seed}_samples_{self.num_samples}"
+            SAVED_DATASET_PATH / f"seed_{self.seed}_samples_{self.num_samples}"
         )
         self._cached = (
             self.dataset_path.exists()
@@ -101,22 +105,22 @@ class TrainingDataset:
             ds = datasets.load_dataset(
                 path=TRAINING_DATASET_NAME, name=TRAINING_DATASET_SPLIT, split="train"
             )
-            logger.info(f"Loaded raw dataset with {ds.num_rows} samples")
+            logger.debug(f"Loaded raw dataset with {ds.num_rows} samples")
 
             # Sample by shuffling
             ds = ds.shuffle(seed=self.seed).select(range(self.num_samples))
-            logger.info(f"Sampled dataset to {ds.num_rows} samples")
+            logger.debug(f"Sampled dataset to {ds.num_rows} samples")
 
             # Process and format
             ds = self._process_dataset(ds)
-            logger.info("Dataset processed")
+            logger.debug("Dataset processed")
 
             # Use save_to_disk(..., num_proc=os.cpu_count()) if saving to disk is too slow.
             ds.save_to_disk(self.dataset_path)
-            logger.info("Dataset saved to disk")
+            logger.debug("Dataset saved to disk")
             self._cached = True
         else:
-            logger.info("Loading cached dataset from disk")
+            logger.debug("Loading cached dataset from disk")
             ds = cast(datasets.Dataset, datasets.load_from_disk(self.dataset_path))
             logger.info(f"Loaded cached dataset with {ds.num_rows} samples")
 
@@ -171,12 +175,15 @@ class TrainingDataset:
                (num_correct / num_tests)
             """
             testcases = [
-                testcase.replace("assert ", "") for testcase in example["testcase"]
+                testcase.strip().replace("assert ", "")
+                for testcase in example["testcase"]
+                if testcase.strip() and testcase.strip().startswith("assert")
             ]
             test_str = textwrap.dedent(
                 f"""
+                import json
                 results = [{", ".join(testcase for testcase in testcases)}]
-                results
+                print(json.dumps(results))
                 """
             ).rstrip()
             example["tests"] = test_str
@@ -200,7 +207,7 @@ class TrainingDataset:
                 "Creating test solutions",
             ],
         ):
-            logger.info(f"Processing dataset: {desc}")
+            logger.debug(f"Processing dataset: {desc}")
             ds = ds.map(
                 function=func,
                 desc=desc,
@@ -208,7 +215,7 @@ class TrainingDataset:
                 num_proc=os.cpu_count(),
             )
 
-        logger.info("Removing columns that are no longer needed")
+        logger.debug("Removing columns that are no longer needed")
         ds = ds.remove_columns(
             [
                 "instruction",
@@ -221,68 +228,104 @@ class TrainingDataset:
 
         return ds
 
-    def verify_test_format(self) -> TestFormatVerification:
+    def verify_test_format(
+        self, sandbox_type: SandboxType | Literal["auto"] = SandboxType.AUTO
+    ) -> TestFormatVerification:
         """
-        Test the provided solutions to verify that the test format works in the Monty sandbox.
+        Test the provided solutions to verify that the test format works in the sandbox.
 
         We want to ensure that model code will pass if it is correct, so we first
-        test against the verified code solutions.
+        test against the verified code solutions. This method uses the unified Sandbox
+        API to automatically fall back to Docker if Monty execution is not possible.
 
-        Returns a TestFormatVerification object with the overall score along with the
-        scores for each example in the dataset.
+        Returns a TestFormatVerification object with the overall score, tracking info,
+        and individual scores for each example.
         """
         test_results = []
         skipped_examples = []
+        monty_count = 0
+        docker_count = 0
+        sandbox = Sandbox(max_duration_sec=7.0, sandbox_type=sandbox_type)
+
         for example in tqdm(self.data, desc="Verifying test format"):
             test_solution = example["test_solution"]
             try:
-                sandbox = PythonSandbox(code=test_solution, max_duration_secs=5)
-            except pydantic_monty.MontySyntaxError as e:
-                logger.error(
-                    f"Syntax error in test solution. Sequence ID: {example['seq_id']}. Error: {e}"
+                execution = cast(
+                    SandboxExecution,
+                    sandbox.run(code=test_solution, skip_compatibility_check=True),
                 )
-                skipped_examples.append(
-                    {
-                        "seq_id": example["seq_id"],
-                        "error": str(e),
-                        "code": test_solution,
-                    }
-                )
-                continue
+                if execution.sandbox_type == SandboxType.MONTY:
+                    monty_count += 1
+                elif execution.sandbox_type == SandboxType.DOCKER:
+                    docker_count += 1
+
+                if execution.failed:
+                    logger.error(
+                        f"Error running test solution. Sequence ID: {example['seq_id']}. "
+                        f"Errors: {'. '.join(err.message for err in (execution.errors or []))}"
+                    )
+                    skipped_examples.append(
+                        {
+                            "seq_id": example["seq_id"],
+                            "errors": ". ".join(
+                                err.message for err in (execution.errors or [])
+                            ),
+                            "sandbox_type": execution.sandbox_type.value,
+                            "code": test_solution,
+                        }
+                    )
+                    continue
+
+                # Parse the test results from stdout (both sandboxes print it)
+                try:
+                    output_parts = execution.stdout.strip().split("\n")
+                    # Assume the last line is our JSON output
+                    results = json.loads(output_parts[-1])
+                    test_results.append(
+                        {
+                            "seq_id": example["seq_id"],
+                            "test_results": results,
+                            "sandbox_type": execution.sandbox_type.value,
+                        }
+                    )
+                except (json.JSONDecodeError, IndexError) as e:
+                    logger.error(
+                        f"Failed to parse test results from stdout. Seq ID: {example['seq_id']}. "
+                        f"Stdout: {execution.stdout!r}. Error: {e}"
+                    )
+                    skipped_examples.append(
+                        {
+                            "seq_id": example["seq_id"],
+                            "errors": f"Output parsing error: {e}",
+                            "sandbox_type": execution.sandbox_type.value,
+                            "code": test_solution,
+                        }
+                    )
+
             except Exception as e:
                 logger.error(
-                    f"Unexpected runtime error when parsing code. Sequence ID: {example['seq_id']}. Error: {e}"
+                    f"Unexpected error when running code. Sequence ID: {example['seq_id']}. Error: {e}"
                 )
                 skipped_examples.append(
                     {
                         "seq_id": example["seq_id"],
-                        "error": str(e),
+                        "errors": str(e),
                         "code": test_solution,
                     }
                 )
                 continue
-            try:
-                test_result = sandbox.run().output
-            # Use BaseException to catch pyo3_runtime.PanicException, which is raised
-            # when Monty encounters a fatal error during execution.
-            except BaseException as e:
-                logger.error(
-                    f"Error running test solution. Sequence ID: {example['seq_id']}. Error: {e}"
-                )
-                skipped_examples.append(
-                    {
-                        "seq_id": example["seq_id"],
-                        "error": str(e),
-                        "code": test_solution,
-                    }
-                )
-                continue
-            test_results.append(
-                {"seq_id": example["seq_id"], "test_results": test_result}
+
+        # Calculate pass rates
+        if not test_results:
+            return TestFormatVerification(
+                overall_pass_rate=0.0,
+                test_level_pass_rate=0.0,
+                test_results=[],
+                monty_count=monty_count,
+                docker_count=docker_count,
+                skipped_examples=skipped_examples,
             )
 
-        # The pass rate for all problems, where a problem is considered passed if all
-        # of its test cases pass.
         overall_pass_rate = pass_rate(
             [all(result["test_results"]) for result in test_results]
         )
@@ -292,12 +335,17 @@ class TrainingDataset:
         for result in test_results:
             all_test_results.extend(result["test_results"])
         test_level_pass_rate = pass_rate(all_test_results)
+
         logger.info(f"Overall pass rate: {overall_pass_rate:.2%}")
         logger.info(f"Test level pass rate: {test_level_pass_rate:.2%}")
+        logger.info(f"Monty count: {monty_count}, Docker count: {docker_count}")
         print(f"Number of skipped examples: {len(skipped_examples)}")
+
         return TestFormatVerification(
             overall_pass_rate=overall_pass_rate,
             test_level_pass_rate=test_level_pass_rate,
             test_results=test_results,
+            monty_count=monty_count,
+            docker_count=docker_count,
             skipped_examples=skipped_examples,
         )
