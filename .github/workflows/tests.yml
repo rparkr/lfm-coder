@@ -14,6 +14,11 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-docker-action@v5
 
+      - name: Build Docker container image
+        run: |
+          docker build --tag lfm-coder-sandbox:latest \
+            --file src/lfm_coder/sandbox/Dockerfile.sandbox
+
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
         with:
@@ -42,12 +47,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      # GitHub's hosted runners include Podman by default
+      # GitHub's hosted runners include Podman by default; if we need a
+      # specific version, we can install it using:
       # - name: Set up Podman
       #   uses: redhat-actions/podman-install@main
 
       - name: Check Podman version
         run: podman --version
+
+      - name: Build Docker container image
+        run: |
+          podman build --tag lfm-coder-sandbox:latest \
+            --file src/lfm_coder/sandbox/Dockerfile.sandbox
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
