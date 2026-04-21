@@ -17,7 +17,6 @@ class SandboxType(StrEnum):
 
     DOCKER = "docker"
     MONTY = "monty"
-    CONTAINER_POOL = "container_pool"
     AUTO = "auto"
 
 
