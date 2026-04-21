@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import datetime
 import importlib.util
+from enum import StrEnum
 from importlib.resources import as_file, files
 from typing import Any
 
@@ -51,9 +52,15 @@ else:
     # Placeholders for when llm_sandbox is not installed
     from typing import TYPE_CHECKING
 
-    class SandboxBackend:
-        PODMAN = "podman"
+    class SandboxBackend(StrEnum):
+        """Enumeration of supported sandbox backend technologies.
+
+        Each value represents a different containerization or virtualization technology
+        that can be used to isolate code execution.
+        """
+
         DOCKER = "docker"
+        PODMAN = "podman"
 
     if TYPE_CHECKING:
         import llm_sandbox
@@ -88,8 +95,6 @@ class PooledDockerSandbox:
                 "please install with `uv pip install 'lfm-coder[container-pools]'`."
             )
         # Convert string to SandboxBackend enum if needed
-        if isinstance(backend, str):
-            backend = SandboxBackend(backend)  # type: ignore
         self.max_duration_sec = max_duration_sec
         self.max_memory_mb = max_memory_mb
         self.disable_network = disable_network
@@ -99,12 +104,21 @@ class PooledDockerSandbox:
         self.verbose = verbose
         self._module_mapping = None
 
-        self.container_runtime = detect_container_runtime()
-        logger.info(f"Using container runtime: {self.container_runtime}")
+        # Detect container runtime socket configuration
+        self.runtime_config = self._detect_runtime_config()
+        self.container_runtime = self.runtime_config["backend"]
+        logger.info(f"Attempting to use container runtime: {self.container_runtime}")
+        if str(backend) != self.container_runtime:
+            logger.warning(
+                f"Specified backend '{backend}' does not match detected container runtime '{self.container_runtime}'. "
+                f"Using detected runtime '{self.container_runtime}' instead."
+            )
+            backend = SandboxBackend(self.container_runtime)  # type: ignore
+
 
         # Initialize pool manager.
         pool_kwargs = {
-            "backend": backend,
+            "backend": SandboxBackend(backend),
             "config": PoolConfig(  # type: ignore
                 max_pool_size=max_pool_size,
                 min_pool_size=min_pool_size,
@@ -117,12 +131,15 @@ class PooledDockerSandbox:
         if self.disable_network:
             pool_kwargs["runtime_configs"]["network_mode"] = "none"
 
+        # If image exists, use it; otherwise build from Dockerfile
         if self._image_exists():
             pool_kwargs["image"] = self.image_name
             self._pool = create_pool_manager(**pool_kwargs)  # type: ignore
+            logger.info(f"Using existing image: {self.image_name}")
         else:
             with as_file(self.dockerfile_path) as df_path:
                 pool_kwargs["dockerfile"] = str(df_path)
+                logger.info("Building image from Dockerfile")
                 self._pool = create_pool_manager(**pool_kwargs)  # type: ignore
 
     def __repr__(self) -> str:
@@ -147,6 +164,76 @@ class PooledDockerSandbox:
             check=False,
         )
         return bool(result.stdout.strip())
+
+    def _detect_runtime_config(self) -> dict:
+        """Detect the correct container runtime backend and socket configuration.
+
+        This method handles user-specific socket mismatches that occur in CI
+        environments where Podman runs with a different user ID than the actual
+        podman service socket.
+
+        Returns:
+            dict: Contains 'backend' key with the correct runtime backend to use
+                  (e.g., 'podman', 'docker', or 'auto')
+        """
+        import os
+        import subprocess
+        import socket
+
+        # Try Podman first - detect its socket for the current user
+        backend = SandboxBackend.PODMAN
+        uds_paths = [
+            f"/run/user/{os.getuid()}/podman/podman.sock",
+            f"/run/user/{os.getuid()}/podman",
+        ]
+
+        for path in uds_paths:
+            try:
+                # Verify if socket is accessible
+                import subprocess
+
+                result = subprocess.run(
+                    ["podman", "--version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    backend = SandboxBackend.PODMAN
+                    logger.debug(f"Podman socket found: {path}")
+                    break
+            except Exception:
+                continue
+
+        # Check for Docker socket
+        docker_sock = "/var/run/docker.sock"
+        docker_backend = SandboxBackend.DOCKER
+        if not os.path.exists(docker_sock):
+            try:
+                # Try TCP API as fallback
+                socket.create_connection(("localhost", 2375), timeout=2)
+                backend = docker_backend
+                logger.debug("Docker TCP API detected")
+            except ConnectionRefusedError:
+                pass
+
+        # Default to podman socket path for the current user
+        uds_file = os.path.join(
+            os.path.expanduser("~"), f"user-{os.getuid()}/", ".podman"
+        )
+        if os.path.exists(uds_file):
+            backend = SandboxBackend.PODMAN
+
+        if backend == SandboxBackend.PODMAN:
+            logger.debug("Using Podman backend")
+        else:
+            logger.debug("Using Docker backend")
+
+        return {
+            "backend": backend,
+            "uds_path": uds_file if backend == SandboxBackend.PODMAN else docker_sock,
+        }
 
     @property
     def module_mapping(self) -> dict[str, str]:
