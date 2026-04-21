@@ -199,7 +199,8 @@ class Sandbox:
             max_cpus: Optional override for the maximum number of CPUs (Docker only).
             input_files: Files to make available in the sandbox.
             env_vars: Environment variables for the sandbox.
-            external_functions: Dictionary of functions callable from inside the sandbox (Monty only).
+            external_functions: Dictionary of functions callable from inside the sandbox.
+                Primarily meant for Monty, but compatible with Docker as well.
             max_workers: Maximum number of concurrent workers for batch execution.
             skip_compatibility_check: Whether to skip the compatibility check for Monty.
                 If sandbox_type is "auto" this will still fall back to Docker if Monty
@@ -236,6 +237,7 @@ class Sandbox:
                 input_files=input_files,
                 env_vars=env_vars,
                 max_workers=max_workers,
+                external_functions=external_functions,
                 **kwargs,
             )
 
@@ -266,6 +268,7 @@ class Sandbox:
                     input_files=input_files,
                     env_vars=env_vars,
                     max_workers=max_workers,
+                    external_functions=external_functions,
                     **kwargs,
                 )
 
@@ -295,6 +298,7 @@ class Sandbox:
                 input_files=input_files,
                 env_vars=env_vars,
                 max_workers=max_workers,
+                external_functions=external_functions,
                 **kwargs,
             )
 
@@ -347,6 +351,7 @@ class Sandbox:
                 input_files=input_files,
                 env_vars=env_vars,
                 max_workers=max_workers,
+                external_functions=external_functions,
                 **kwargs,
             )
             return results
@@ -411,6 +416,7 @@ class Sandbox:
                 input_files=input_files,
                 env_vars=env_vars,
                 max_workers=max_workers,
+                external_functions=external_functions,
                 **kwargs,
             )
             for idx, res in zip(docker_indices, docker_results):
@@ -439,6 +445,7 @@ class Sandbox:
                 input_files=input_files,
                 env_vars=env_vars,
                 max_workers=max_workers,
+                external_functions=external_functions,
                 **kwargs,
             )
             for idx, res in zip(fallback_indices, fallback_results):

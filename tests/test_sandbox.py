@@ -117,3 +117,65 @@ class TestSandbox:
         assert result.success is True
         assert result.stdout == "70000"
         assert result.sandbox_type == SandboxType.DOCKER
+
+    def test_external_functions_docker_fallback(self):
+        """Test that external_functions work when code falls back to Docker."""
+
+        def my_helper(x: int) -> int:
+            return x * 3
+
+        # Class code falls back to Docker, but external_functions should still work
+        code = textwrap.dedent("""
+            class Calculator:
+                def __init__(self):
+                    self.value = 0
+
+                def compute(self, x):
+                    return my_helper(x)
+
+            calc = Calculator()
+            print(calc.compute(7))
+        """)
+        sandbox = Sandbox()
+        result = sandbox.run(code, external_functions={"my_helper": my_helper})
+
+        assert result.success is True
+        assert "21" in result.stdout
+        # Should have fallen back to Docker due to class usage
+        assert result.sandbox_type == SandboxType.DOCKER
+
+    def test_external_functions_monty(self):
+        """Test that external_functions work in Monty when code is Monty-compatible."""
+
+        def double(x: int) -> int:
+            return x * 2
+
+        # Simple code that runs in Monty
+        code = "print(double(10))"
+        sandbox = Sandbox()
+        result = sandbox.run(code, external_functions={"double": double})
+
+        assert result.success is True
+        assert "20" in result.stdout
+        assert result.sandbox_type == SandboxType.MONTY
+
+    def test_external_functions_batch_docker(self):
+        """Test external_functions in batch execution that falls back to Docker."""
+
+        def transform(x: int) -> int:
+            return x + 100
+
+        code_list = [
+            "print(transform(1))",
+            "class Foo: pass\nprint(transform(2))",  # Second one uses class, falls to Docker
+        ]
+        sandbox = Sandbox()
+        results = sandbox.run(code_list, external_functions={"transform": transform})
+
+        assert len(results) == 2
+        # First should be Monty
+        assert results[0].sandbox_type == SandboxType.MONTY
+        assert "101" in results[0].stdout
+        # Second should be Docker (due to class)
+        assert results[1].sandbox_type == SandboxType.DOCKER
+        assert "102" in results[1].stdout
