@@ -22,11 +22,6 @@ dependencies = [
     "trl[peft]>=0.29.0",
 ]
 
-[project.optional-dependencies]
-container-pools = [
-    "llm-sandbox[docker,podman]>=0.3.37",
-]
-
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",

@@ -5,16 +5,10 @@ Securely run LLM-generated code in a container using Docker/Podman and uv
 with full support for external libraries and all Python features.
 
 Requires that either Docker or Podman is installed and running on the host machine.
-If using Podman, alias it to `docker` (e.g., add `alias docker=podman` to your
-shell's runtime configuration file like ~/.bashrc or ~/.zshrc).
 
 **Note**:
-This is typically 2-5x faster than `PooledDockerSandbox` and is less resource intensive.
-
-It is not quite as fast as `MontySandbox` because it has to start a container for each
-execution, but it supports external libraries and all Python features so it should
-generally be preferred over `MontySandbox` unless you know the code you are running
-is supported by Monty.
+This is not as fast as `MontySandbox` but it supports external libraries and all Python
+features.
 """
 
 import concurrent.futures

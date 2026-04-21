@@ -11,7 +11,7 @@
 
 ## Developer Commands
 
-- Install dev deps: `uv sync` (requires `container-pools` optional deps)
+- Install dev deps: `uv sync`
 - Lint: `uv run ruff check src/`
 - Type check: `uv run ty check src/`
 - Run tests: `uv run pytest tests/`
@@ -54,4 +54,3 @@
 
 - Sandbox tests verify auto-fallback behavior
 - Reward helpers tested in `tests/test_helpers.py`
-- The `PooledDockerSandbox` is not as reliable and fails often (which is why it is not recommended nor used in other areas of the codebase)
