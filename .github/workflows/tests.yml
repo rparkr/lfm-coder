@@ -34,7 +34,7 @@ jobs:
         run: uv run ty check src/
 
       - name: Run tests
-        run: uv run pytest tests/ --cov=src --cov-report=term-missing
+        run: uv run --all-extras pytest tests/ --cov=src --cov-report=term-missing
 
   test-podman:
     runs-on: ubuntu-latest
@@ -70,4 +70,4 @@ jobs:
         run: uv run ty check src/
 
       - name: Run tests
-        run: uv run pytest tests/ --cov=src --cov-report=term-missing
+        run: uv run --all-extras pytest tests/ --cov=src --cov-report=term-missing
