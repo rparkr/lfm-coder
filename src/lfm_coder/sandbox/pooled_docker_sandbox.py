@@ -260,9 +260,17 @@ class PooledDockerSandbox:
             )
 
     def close(self):
-        """Shut down the pool manager."""
+        """Shut down the pool manager and clean up all containers."""
         if hasattr(self, "_pool") and self._pool:
             self._pool.close()
+
+    def __enter__(self) -> "PooledDockerSandbox":
+        """Enter context manager for proper resource cleanup."""
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Exit context manager and ensure containers are cleaned up."""
+        self.close()
 
     def __del__(self):
         self.close()

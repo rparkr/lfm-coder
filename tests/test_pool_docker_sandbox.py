@@ -7,10 +7,14 @@ from lfm_coder.sandbox import PooledDockerSandbox
 
 @pytest.fixture(scope="module")
 def sandbox():
-    # Use a small pool for testing
-    sb = PooledDockerSandbox(min_pool_size=1, max_pool_size=2, disable_network=False)
-    yield sb
-    sb.close()
+    # Use a small pool for testing with sufficient memory for package installation
+    with PooledDockerSandbox(
+        min_pool_size=1,
+        max_pool_size=2,
+        disable_network=False,
+        max_memory_mb=512,
+    ) as sb:
+        yield sb
 
 
 def test_simple_execution(sandbox):
