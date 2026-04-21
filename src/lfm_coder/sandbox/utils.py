@@ -1,5 +1,6 @@
 import ast
 import json
+import subprocess
 import sys
 from importlib.resources import files
 
@@ -109,3 +110,48 @@ def detect_dependencies(code: str, module_mapping: dict[str, str]) -> list[str]:
         dependencies.add(pypi_name)
 
     return sorted(list(dependencies))
+
+def detect_container_runtime() -> str:
+    """Detect the container runtime (podman or docker) available on the system.
+
+    Attempts to detect podman first, then falls back to docker if podman is not
+    available. This ensures podman is prioritized when both are installed.
+
+    Returns:
+        str: Either "podman" or "docker" depending on what's available.
+
+    Raises:
+        RuntimeError: If neither podman nor docker is available.
+    """
+    # Try podman first
+    try:
+        result = subprocess.run(
+            ["podman", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            logger.info("Detected container runtime: podman")
+            return "podman"
+    except FileNotFoundError:
+        logger.debug("Podman not found, falling back to docker")
+
+    # Fall back to docker
+    try:
+        result = subprocess.run(
+            ["docker", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            logger.info("Detected container runtime: docker")
+            return "docker"
+    except FileNotFoundError:
+        logger.error("Neither podman nor docker found")
+
+    raise RuntimeError(
+        "No container runtime (podman or docker) found. "
+        "Please install either podman or docker."
+    )
