@@ -10,6 +10,7 @@ data/
 
 # Tests
 **/.pytest_cache/
+.coverage
 
 # Ruff
 **/.ruff_cache/

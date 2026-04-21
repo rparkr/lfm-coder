@@ -19,9 +19,11 @@ is supported by Monty.
 
 import concurrent.futures
 import datetime
+import inspect
 import os
 import subprocess
 import tempfile
+import textwrap
 from importlib.resources import as_file, files
 from pathlib import Path
 from typing import Any, cast, overload
@@ -221,6 +223,7 @@ class DockerSandbox:
         max_cpus: float | None = None,
         input_files: list[Path] | None = None,
         env_vars: dict[str, str] | None = None,
+        external_functions: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> SandboxExecution | list[SandboxExecution]:
         """Execute Python code in ephemeral Docker containers.
@@ -233,6 +236,8 @@ class DockerSandbox:
             max_cpus: Optional override for the maximum number of CPUs to use.
             input_files: Files to make available in the sandbox (mounted read-only).
             env_vars: Environment variables for the sandbox.
+            external_functions: A dictionary mapping function names to their callable
+                objects.
             **kwargs: Extra input arguments (to align with MontySandbox API).
 
         Returns:
@@ -269,6 +274,7 @@ class DockerSandbox:
                         max_cpus=cpus,
                         input_files=input_files,
                         env_vars=env_vars,
+                        external_functions=external_functions,
                     )
                     for c in code
                 ]
@@ -281,6 +287,7 @@ class DockerSandbox:
             max_cpus=cpus,
             input_files=input_files,
             env_vars=env_vars,
+            external_functions=external_functions,
         )
 
     def _run_single(
@@ -291,6 +298,7 @@ class DockerSandbox:
         max_cpus: float | None = None,
         input_files: list[Path] | None = None,
         env_vars: dict[str, str] | None = None,
+        external_functions: dict[str, Any] | None = None,
     ) -> SandboxExecution:
         """Execute a single Python script in a Docker container."""
         # Use supplied values or fall back to instance defaults
@@ -302,13 +310,16 @@ class DockerSandbox:
 
         dependencies = detect_dependencies(code, self.module_mapping)
         processed_code = self._add_script_metadata(code, dependencies)
-
+        processed_code = self._add_external_functions(
+            processed_code, external_functions
+        )
         start_time = datetime.datetime.now(datetime.timezone.utc)
         sandbox_input = SandboxInput(
             code=code,
             input_files=input_files,
             env_vars=env_vars,
             dependencies=dependencies,
+            external_functions=external_functions,
         )
 
         stdout = ""
@@ -438,3 +449,35 @@ class DockerSandbox:
         metadata.append("# ///")
 
         return "\n".join(metadata) + "\n\n" + code
+
+    def _add_external_functions(
+        self, code: str, external_functions: dict[str, Any] | None = None
+    ) -> str:
+        """Add external function definitions to the code.
+
+        Enables compatibility with MontySandbox's external function support by including
+        the source code of the provided functions at the top of the script, enabling the
+        the functions to be available in the container environment.
+
+        Args:
+            code: The original code to execute.
+            external_functions: A dictionary mapping function names to their callable
+                objects. The source code of these functions will be included in the
+                script.
+        """
+        if not external_functions:
+            return code
+
+        function_defs = []
+        for name, func in external_functions.items():
+            try:
+                source = inspect.getsource(func)
+                # Dedent to remove any leading indentation (e.g., from nested functions)
+                source = textwrap.dedent(source)
+                function_defs.append(source)
+            except Exception as e:
+                logger.warning(
+                    f"Could not get source for external function {name}: {e}"
+                )
+
+        return "\n\n".join(function_defs) + "\n\n" + code
