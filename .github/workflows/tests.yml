@@ -1,0 +1,64 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run linter
+        run: uv run ruff check src/
+
+      - name: Run type checker
+        run: uv run ty check src/
+
+      - name: Run tests
+        run: uv run pytest tests/ --cov=src --cov-report=term-missing
+
+  test-podman:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # GitHub's hosted runners include Podman by default
+      # - name: Set up Podman
+      #   uses: redhat-actions/podman-install@main
+
+      - name: Check Podman version
+        run: podman --version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run linter
+        run: uv run ruff check src/
+
+      - name: Run type checker
+        run: uv run ty check src/
+
+      - name: Run tests
+        run: uv run pytest tests/ --cov=src --cov-report=term-missing
