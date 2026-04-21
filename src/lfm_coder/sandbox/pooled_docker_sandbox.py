@@ -45,13 +45,18 @@ if _has_llm_sandbox:
     from llm_sandbox.session import SandboxSession
 else:
     # Placeholders for when llm_sandbox is not installed
+    from typing import TYPE_CHECKING
+
     class SandboxBackend:
         PODMAN = "podman"
         DOCKER = "docker"
 
-    PoolConfig = None
-    create_pool_manager = None
-    SandboxSession = None
+    if TYPE_CHECKING:
+        import llm_sandbox
+
+    PoolConfig = None  # type: ignore[assignment]
+    create_pool_manager = None  # type: ignore[assignment]
+    SandboxSession = None  # type: ignore[assignment]
 
 
 class PooledDockerSandbox:
@@ -61,7 +66,7 @@ class PooledDockerSandbox:
 
     def __init__(
         self,
-        backend: SandboxBackend = SandboxBackend.PODMAN,
+        backend: "llm_sandbox.SandboxBackend" = "podman",  # type: ignore
         max_duration_sec: float = 10.0,
         max_memory_mb: int = 64,
         disable_network: bool = True,
@@ -78,6 +83,9 @@ class PooledDockerSandbox:
                 "llm-sandbox is missing. To use PooledDockerSandbox, "
                 "please install with `uv pip install 'lfm-coder[container-pools]'`."
             )
+        # Convert string to SandboxBackend enum if needed
+        if isinstance(backend, str):
+            backend = SandboxBackend(backend)  # type: ignore
         self.max_duration_sec = max_duration_sec
         self.max_memory_mb = max_memory_mb
         self.disable_network = disable_network
@@ -90,7 +98,7 @@ class PooledDockerSandbox:
         # Initialize pool manager.
         pool_kwargs = {
             "backend": backend,
-            "config": PoolConfig(
+            "config": PoolConfig(  # type: ignore
                 max_pool_size=max_pool_size,
                 min_pool_size=min_pool_size,
                 max_container_uses=max_container_uses,
@@ -104,11 +112,11 @@ class PooledDockerSandbox:
 
         if self._image_exists():
             pool_kwargs["image"] = self.image_name
-            self._pool = create_pool_manager(**pool_kwargs)
+            self._pool = create_pool_manager(**pool_kwargs)  # type: ignore
         else:
             with as_file(self.dockerfile_path) as df_path:
                 pool_kwargs["dockerfile"] = str(df_path)
-                self._pool = create_pool_manager(**pool_kwargs)
+                self._pool = create_pool_manager(**pool_kwargs)  # type: ignore
 
     def __repr__(self) -> str:
         return (
@@ -179,7 +187,7 @@ class PooledDockerSandbox:
         sandbox_input = SandboxInput(code=code, dependencies=libs)
 
         try:
-            with SandboxSession(
+            with SandboxSession(  # type: ignore
                 pool=self._pool,
                 lang="python",
                 verbose=self.verbose,

@@ -11,7 +11,9 @@ I based these functions on the ones used in HumanEval+ and MBPP+ for compatibili
 from typing import Any, TypeGuard, cast
 
 
-def is_float(value: str | list[str] | None, require_all: bool = True) -> bool:
+def is_float(
+    value: str | list[str] | tuple[str, ...] | set[str] | None, require_all: bool = True
+) -> bool:
     """
     Determine whether an input (list or str) is a float data type.
 
@@ -38,8 +40,16 @@ def is_float(value: str | list[str] | None, require_all: bool = True) -> bool:
 
 
 def is_close(
-    result: int | float | list[int | float],
-    expected: int | float | list[int | float],
+    result: int
+    | float
+    | list[int | float]
+    | tuple[int | float, ...]
+    | set[int | float],
+    expected: int
+    | float
+    | list[int | float]
+    | tuple[int | float, ...]
+    | set[int | float],
     abs_tol: float = 1e-6,
     rel_tol: float = 1e-7,
 ) -> bool:
