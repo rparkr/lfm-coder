@@ -199,9 +199,9 @@ class PooledDockerSandbox:
                 result = session.run(code=code, timeout=duration)
 
                 end_time = datetime.datetime.now(datetime.timezone.utc)
-                duration = (end_time - start_time).total_seconds()
+                actual_duration = (end_time - start_time).total_seconds()
 
-                timed_out = duration > duration or result.exit_code == 124
+                timed_out = actual_duration >= duration or result.exit_code == 124
 
                 errors = []
                 if result.exit_code != 0:
@@ -222,7 +222,7 @@ class PooledDockerSandbox:
                     exit_code=result.exit_code,
                     start_time=start_time,
                     end_time=end_time,
-                    duration_sec=duration,
+                    duration_sec=actual_duration,
                     timed_out=timed_out,
                     memory_limit_hit=result.exit_code == 137,
                     inputs=sandbox_input,
