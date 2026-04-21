@@ -34,7 +34,6 @@ from lfm_coder.sandbox.types import (
     SandboxType,
 )
 from lfm_coder.sandbox.utils import (
-    detect_container_runtime,
     detect_dependencies,
     load_module_mapping,
 )
