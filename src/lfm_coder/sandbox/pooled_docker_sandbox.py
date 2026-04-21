@@ -32,7 +32,11 @@ from lfm_coder.sandbox.types import (
     SandboxTimeoutError,
     SandboxType,
 )
-from lfm_coder.sandbox.utils import detect_dependencies, load_module_mapping
+from lfm_coder.sandbox.utils import (
+    detect_container_runtime,
+    detect_dependencies,
+    load_module_mapping,
+)
 
 logger = get_logger(__name__)
 
@@ -95,6 +99,9 @@ class PooledDockerSandbox:
         self.verbose = verbose
         self._module_mapping = None
 
+        self.container_runtime = detect_container_runtime()
+        logger.info(f"Using container runtime: {self.container_runtime}")
+
         # Initialize pool manager.
         pool_kwargs = {
             "backend": backend,
@@ -134,7 +141,7 @@ class PooledDockerSandbox:
         import subprocess
 
         result = subprocess.run(
-            ["docker", "images", "--quiet", self.image_name],
+            [self.container_runtime, "images", "--quiet", self.image_name],
             capture_output=True,
             text=True,
             check=False,

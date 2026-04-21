@@ -39,7 +39,11 @@ from lfm_coder.sandbox.types import (
     SandboxTimeoutError,
     SandboxType,
 )
-from lfm_coder.sandbox.utils import detect_dependencies, load_module_mapping
+from lfm_coder.sandbox.utils import (
+    detect_container_runtime,
+    detect_dependencies,
+    load_module_mapping,
+)
 
 logger = get_logger(__name__)
 
@@ -88,6 +92,8 @@ class DockerSandbox:
 
         self._image_ready = False
         self._module_mapping = None
+
+        self.container_runtime = detect_container_runtime()
 
     @property
     def max_duration_sec(self) -> int | float | None:
@@ -161,7 +167,7 @@ class DockerSandbox:
 
         # Check if image exists
         result = subprocess.run(
-            ["docker", "images", "--quiet", self.image_name],
+            [self.container_runtime, "images", "--quiet", self.image_name],
             capture_output=True,
             text=True,
             check=False,
@@ -176,7 +182,7 @@ class DockerSandbox:
         with as_file(self.dockerfile_path) as df_path:
             subprocess.run(
                 [
-                    "docker",
+                    self.container_runtime,
                     "build",
                     "--tag",
                     self.image_name,
@@ -335,7 +341,7 @@ class DockerSandbox:
             code_file.write_text(processed_code)
 
             docker_cmd = [
-                "docker",
+                self.container_runtime,
                 "run",
                 "--rm",
                 "--memory",
