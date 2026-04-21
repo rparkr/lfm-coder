@@ -17,7 +17,7 @@ jobs:
       - name: Build Docker container image
         run: |
           docker build --tag lfm-coder-sandbox:latest \
-            --file src/lfm_coder/sandbox/Dockerfile.sandbox
+            --file src/lfm_coder/sandbox/Dockerfile.sandbox .
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -58,7 +58,7 @@ jobs:
       - name: Build Docker container image
         run: |
           podman build --tag lfm-coder-sandbox:latest \
-            --file src/lfm_coder/sandbox/Dockerfile.sandbox
+            --file src/lfm_coder/sandbox/Dockerfile.sandbox .
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
