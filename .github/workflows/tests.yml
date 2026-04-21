@@ -16,6 +16,10 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
+        with:
+          # Explicitly enable caching (though true by default)
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Set up Python
         run: uv python install 3.13
@@ -47,6 +51,11 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
+        with:
+          # Explicitly enable caching (though true by default)
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
 
       - name: Set up Python
         run: uv python install 3.13
