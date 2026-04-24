@@ -168,4 +168,4 @@ def pass_rate(test_results: list[bool]) -> float:
     """
     if not test_results:
         return 0.0
-    return sum(test_results) / len(test_results)
+    return sum(1 for test_result in test_results if test_result) / len(test_results)

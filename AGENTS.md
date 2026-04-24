@@ -7,7 +7,7 @@
 - **Linter**: `ruff`
 - **Test command**: `uv run pytest tests/`
 
-**Use `scripts/` repository** for exploratory code (e.g., `scripts/benchmark_sandboxes.py` for sandbox troubleshooting).
+**Use `scripts/` repository** for exploratory code that may be useful later (e.g., `scripts/benchmark_sandboxes.py` for sandbox troubleshooting).
 
 ## Developer Commands
 
@@ -19,25 +19,29 @@
 
 ## Project Structure
 
-- `src/lfm_coder/` — Main package (entry point)
-  - `sandbox/` — Execution engines (`Sandbox`, `MontySandbox`, `DockerSandbox`)
-  - `datasets/` — Training/eval dataset processing
-  - `rewards/` — RLVR reward computation
-  - `evals/` — Evaluation metrics/verification
-- `scripts/` — Utility scripts (import mapping, sandbox demos, benchmarking)
+- `src/lfm_coder/`: Main package (entry point)
+  - `sandbox/`: Execution engines (`Sandbox`, `MontySandbox`, `DockerSandbox`)
+  - `datasets/`: Training/eval dataset processing
+  - `rewards/`: RLVR reward computation
+  - `evals/`: Evaluation metrics/verification
+  - `train/`: Model training
+- `scripts/`: Utility scripts (import mapping, sandbox demos, benchmarking)
+- `data/`: Datasets for training and evaluation; created by the modules in the `datasets/` directory. Not under source control.
+   - `data/training/`: training dataset after being downloaded from Hugging Face, sampled, processed, and prepared for model training. Includes both a single Parquet file and a `datasets`-native directory with Arrow formatted data.
+   - `data/evaluation`: evaluation (benchmark) datasets, after being downloaded from Hugging Face, processed, and prepared for model evaluation. The two datasets currently used for evaluation are HumanEvalPlus and MBPPPlus.
 
 ## Key Architectural Facts
 
-1. **Dual execution engines**:
+1. **Dual execution engines for the Sandbox**:
    - `MontySandbox`: Fast Rust-based Python (pydantic-monty)
    - `DockerSandbox`: Full PyPI support via containers
    - Auto-fallback to Docker if Monty fails
 
-2. **Training flow** (in progress):
+2. **Training flow**:
    - Dataset: `OpenCoder-LLM/opc-sft-stage2` (SFT stage)
    - Evaluation: `humanevalplus`, `mbppplus`
    - Framework: TRL + QLoRA
-   - Future: Config files for model/dataset selection
+   - Config files for model and hyperparameter selection
 
 3. **Build quirks**:
    - `uv_build` includes `Dockerfile.sandbox` + `module_mapping.json` in build artifacts since those are used for DockerSandbox

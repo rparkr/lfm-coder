@@ -272,7 +272,6 @@ class Sandbox:
                     **kwargs,
                 )
 
-        logger.debug("Attempting execution with MontySandbox")
         result = self.monty.run(
             code,
             max_duration_sec=max_duration_sec,

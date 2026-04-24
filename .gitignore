@@ -2,7 +2,7 @@
 .venv/
 .env
 
-# Datasets
+# Datasets and logs of evaluation results
 data/
 
 # Byte-compiled / optimized
@@ -16,7 +16,7 @@ data/
 **/.ruff_cache/
 
 # Logs
-logs.jsonl
+logs/
 
 # IDE settings
 .vscode/
