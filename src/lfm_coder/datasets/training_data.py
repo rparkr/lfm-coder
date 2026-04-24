@@ -1,8 +1,10 @@
 import json
+import math
 import os
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
+from pprint import pprint
 from typing import Any, Literal, cast
 
 import datasets
@@ -228,8 +230,10 @@ class TrainingDataset:
 
         return ds
 
-    def verify_test_format(
-        self, sandbox_type: SandboxType | Literal["auto"] = SandboxType.AUTO
+    def verify_test_solution(
+        self,
+        batch_size: int = 20,
+        sandbox_type: SandboxType | Literal["auto"] = SandboxType.AUTO,
     ) -> TestFormatVerification:
         """
         Test the provided solutions to verify that the test format works in the sandbox.
@@ -245,74 +249,73 @@ class TrainingDataset:
         skipped_examples = []
         monty_count = 0
         docker_count = 0
-        sandbox = Sandbox(max_duration_sec=7.0, sandbox_type=sandbox_type)
+        sandbox = Sandbox(max_duration_sec=10.0, sandbox_type=sandbox_type)
 
-        for example in tqdm(self.data, desc="Verifying test format"):
-            test_solution = example["test_solution"]
+        for batch in tqdm(
+            self.data.iter(batch_size=batch_size),
+            desc="Verifying test test solutions",
+            total=math.ceil(self.data.num_rows / batch_size),
+        ):
+            test_solutions = batch["test_solution"]
+            seq_ids = batch["seq_id"]
             try:
-                execution = cast(
-                    SandboxExecution,
-                    sandbox.run(code=test_solution, skip_compatibility_check=True),
+                executions: list[SandboxExecution] = sandbox.run(
+                    code=test_solutions, skip_compatibility_check=True
                 )
-                if execution.sandbox_type == SandboxType.MONTY:
-                    monty_count += 1
-                elif execution.sandbox_type == SandboxType.DOCKER:
-                    docker_count += 1
 
-                if execution.failed:
-                    logger.error(
-                        f"Error running test solution. Sequence ID: {example['seq_id']}. "
-                        f"Errors: {'. '.join(err.message for err in (execution.errors or []))}"
-                    )
-                    skipped_examples.append(
-                        {
-                            "seq_id": example["seq_id"],
-                            "errors": ". ".join(
-                                err.message for err in (execution.errors or [])
-                            ),
-                            "sandbox_type": execution.sandbox_type.value,
-                            "code": test_solution,
-                        }
-                    )
-                    continue
+                for seq_id, test_solution, execution in zip(
+                    seq_ids, test_solutions, executions
+                ):
+                    if execution.sandbox_type == SandboxType.MONTY:
+                        monty_count += 1
+                    elif execution.sandbox_type == SandboxType.DOCKER:
+                        docker_count += 1
 
-                # Parse the test results from stdout (both sandboxes print it)
-                try:
-                    output_parts = execution.stdout.strip().split("\n")
-                    # Assume the last line is our JSON output
-                    results = json.loads(output_parts[-1])
-                    test_results.append(
-                        {
-                            "seq_id": example["seq_id"],
-                            "test_results": results,
-                            "sandbox_type": execution.sandbox_type.value,
-                        }
-                    )
-                except (json.JSONDecodeError, IndexError) as e:
-                    logger.error(
-                        f"Failed to parse test results from stdout. Seq ID: {example['seq_id']}. "
-                        f"Stdout: {execution.stdout!r}. Error: {e}"
-                    )
-                    skipped_examples.append(
-                        {
-                            "seq_id": example["seq_id"],
-                            "errors": f"Output parsing error: {e}",
-                            "sandbox_type": execution.sandbox_type.value,
-                            "code": test_solution,
-                        }
-                    )
+                    if execution.failed:
+                        logger.error(
+                            f"Error running test solution. Sequence ID: {seq_id}. "
+                            f"Errors: {'. '.join(err.message for err in (execution.errors or []))}"
+                        )
+                        skipped_examples.append(
+                            {
+                                "seq_id": seq_id,
+                                "errors": ". ".join(
+                                    err.message for err in (execution.errors or [])
+                                ),
+                                "sandbox_type": execution.sandbox_type.value,
+                                "code": test_solution,
+                            }
+                        )
+                        continue
+
+                    # Parse the test results from stdout (both sandboxes print it)
+                    try:
+                        output_parts = execution.stdout.strip().split("\n")
+                        # Assume the last line is our JSON output
+                        results = json.loads(output_parts[-1])
+                        test_results.append(
+                            {
+                                "seq_id": seq_id,
+                                "test_results": results,
+                                "sandbox_type": execution.sandbox_type.value,
+                            }
+                        )
+                    except (json.JSONDecodeError, IndexError) as e:
+                        logger.error(
+                            f"Failed to parse test results from stdout. Seq ID: {seq_id}. "
+                            f"Stdout: {execution.stdout!r}. Error: {e}"
+                        )
+                        skipped_examples.append(
+                            {
+                                "seq_id": seq_id,
+                                "errors": f"Output parsing error: {e}",
+                                "sandbox_type": execution.sandbox_type.value,
+                                "code": test_solution,
+                            }
+                        )
 
             except Exception as e:
-                logger.error(
-                    f"Unexpected error when running code. Sequence ID: {example['seq_id']}. Error: {e}"
-                )
-                skipped_examples.append(
-                    {
-                        "seq_id": example["seq_id"],
-                        "errors": str(e),
-                        "code": test_solution,
-                    }
-                )
+                logger.error(f"Unexpected error when running code batch. Error: {e}")
                 continue
 
         # Calculate pass rates
@@ -339,7 +342,7 @@ class TrainingDataset:
         logger.info(f"Overall pass rate: {overall_pass_rate:.2%}")
         logger.info(f"Test level pass rate: {test_level_pass_rate:.2%}")
         logger.info(f"Monty count: {monty_count}, Docker count: {docker_count}")
-        print(f"Number of skipped examples: {len(skipped_examples)}")
+        logger.info(f"Number of skipped examples: {len(skipped_examples)}")
 
         return TestFormatVerification(
             overall_pass_rate=overall_pass_rate,
@@ -349,3 +352,18 @@ class TrainingDataset:
             docker_count=docker_count,
             skipped_examples=skipped_examples,
         )
+
+
+if __name__ == "__main__":
+    results = TrainingDataset().verify_test_solution(
+        batch_size=20, sandbox_type=SandboxType.AUTO
+    )
+    pprint(
+        {
+            "overall_pass_rate": results.overall_pass_rate,
+            "test_level_pass_rate": results.test_level_pass_rate,
+            "monty_count": results.monty_count,
+            "docker_count": results.docker_count,
+            "skipped_examples": len(results.skipped_examples or []),
+        }
+    )

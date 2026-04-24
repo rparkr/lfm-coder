@@ -257,7 +257,8 @@ class DockerSandbox:
             if max_workers and max_workers > default_max:
                 logger.warning(
                     f"max_workers ({max_workers}) exceeds recommended limit "
-                    f"({default_max}) based on CPU count and CPU limit."
+                    f"({default_max}) based on CPU count ({cpu_count}) and "
+                    f"CPU limit per worker ({cpus})."
                 )
 
             logger.debug(

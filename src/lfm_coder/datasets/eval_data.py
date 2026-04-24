@@ -1,5 +1,6 @@
 import inspect
 import json
+import math
 import os
 import re
 import textwrap
@@ -71,7 +72,9 @@ class HumanEvalPlusDataset:
             ds = datasets.load_dataset(self.dataset_name, split="test")
             ds = self._process_dataset(ds)
             ds.save_to_disk(self.dataset_path)
-            ds.to_parquet(EVAL_DATASET_ROOT / f"{self.dataset_name}.parquet")
+            ds.to_parquet(
+                str(EVAL_DATASET_ROOT / Path(self.dataset_name).name) + ".parquet"
+            )
             self._cached = True
         else:
             logger.info(f"Loading cached {self.dataset_name} from disk")
@@ -268,7 +271,9 @@ class MBPPPlusDataset:
             ds = datasets.load_dataset(self.dataset_name, split="test")
             ds = self._process_dataset(ds)
             ds.save_to_disk(self.dataset_path)
-            ds.to_parquet(EVAL_DATASET_ROOT / f"{self.dataset_name}.parquet")
+            ds.to_parquet(
+                str(EVAL_DATASET_ROOT / Path(self.dataset_name).name) + ".parquet"
+            )
             self._cached = True
         else:
             logger.info(f"Loading cached {self.dataset_name} from disk")
@@ -296,25 +301,111 @@ class MBPPPlusDataset:
             # Convert to the messages format (using list of messages)
             messages = [{"role": "user", "content": instruction}]
 
-            # Verify test using the provided solution. MBPPPlus loops through the inputs
-            # in the script and includes the entry_point function when asserting correctness.
-            # This differs from HumanEvalPlus, which uses a check function that takes the
-            # entry_point function as an argument.
+            # Replace the "assertion" function with "check" and capture results.
+            # MBPP has two variations of the "assertion" function, so we need to
+            # account for both.
+            replacements = [
+                # 3/378 examples use this form
+                {
+                    "original": (
+                        textwrap.dedent(
+                            """
+                            def assertion(out, exp, atol):
+                                if isinstance(out, bool):
+                                    exact_match = out == exp
+                                else:
+                                    exact_match = exp == (out is not None)
+                            """
+                        )
+                    ),
+                    "replacement": (
+                        textwrap.dedent(
+                            """
+                            def __check(out, exp, atol):
+                                if isinstance(out, bool):
+                                    exact_match = out == exp
+                                else:
+                                    exact_match = exp == (out is not None)
+                                return exact_match
+                            """
+                        )
+                    ),
+                    "use_regex": False,
+                },
+                # 375/378 examples use this form
+                {
+                    "original": "def assertion(out, exp, atol):",
+                    "replacement": "def __check(out, exp, atol):",
+                    "use_regex": False,
+                },
+                {
+                    "original": "assert np.allclose(out, exp, rtol=1e-07, atol=atol)",
+                    "replacement": "return np.allclose(out, exp, rtol=1e-07, atol=atol)",
+                    "use_regex": False,
+                },
+                {
+                    "original": 'assert out == exp, f"out: {out}, exp: {exp}"',
+                    "replacement": "return out == exp",
+                    "use_regex": False,
+                },
+                # Instantiate an empty list to track test results, by identifying the
+                # start of the loop through test cases.
+                # There are two patterns for the start of the loop. This one covers 3/378 records.
+                {
+                    "original": "for i, inp in enumerate(inputs):",
+                    "replacement": "__test_results = []\nfor i, inp in enumerate(inputs):",
+                    "use_regex": False,
+                },
+                # Covers the remaining 375/378 examples.
+                {
+                    "original": "for i, (inp, exp) in enumerate(zip(inputs, results)):",
+                    "replacement": "__test_results = []\nfor i, (inp, exp) in enumerate(zip(inputs, results)):",
+                    "use_regex": False,
+                },
+                # Now, capture and return the test results. We can do this because
+                # we will have already replaced the "assertion" function, so there
+                # should be only one case where that term appears.
+                {
+                    "original": r"assertion\((?P<args>.*)\)",
+                    "replacement": r"__test_results.append(__check(\g<args>))",
+                    "use_regex": True,
+                },
+            ]
+
+            test_cases_code = example["test"]
+
+            for item in replacements:
+                if item["use_regex"]:
+                    test_cases_code = re.sub(
+                        pattern=item["original"],
+                        repl=item["replacement"],
+                        string=test_cases_code,
+                    )  # ty:ignore[no-matching-overload]
+                else:
+                    test_cases_code = test_cases_code.replace(
+                        item["original"], item["replacement"]
+                    )
+
+            # Check solution against the tests
             formatted_tests = (
                 textwrap.dedent(
                     """
                     # Task ID: {task_id}
+                    import json
 
                     {solution}
 
-                    {test_cases}
+                    {test_cases_code}
+
+                    # Print the results as JSON
+                    print(json.dumps(__test_results))
                     """
                 )
                 .strip()
                 .format(
                     task_id=example["task_id"],
                     solution="{solution}",
-                    test_cases=example["test"],
+                    test_cases_code=test_cases_code,
                 )
             )
             # Convert from a JSON list of strings to a list of strings ready to be
@@ -404,26 +495,26 @@ class MBPPPlusDataset:
             max_duration_sec=max_duration_sec,
             max_memory_mb=128,
         )
-        passed = []
+        long_tests_outcome = []
         short_tests_outcome = []
         logger.info(
             f"Dataset: {self.dataset_name}. Verifying {self.data.num_rows} examples."
         )
-        for examples in tqdm(
+        for batch in tqdm(
             self.data.iter(batch_size=batch_size),
             desc=f"Verifying test_solution on {self.dataset_name}",
-            total=self.data.num_rows // batch_size,
+            total=math.ceil(self.data.num_rows / batch_size),
         ):
             batch_start_time = time.time()
-            results = sandbox.run(examples["test_solution"])
+            results = sandbox.run(batch["test_solution"])
             logger.debug(
-                f"Dataset: {self.dataset_name}. Long tests; batch of {len(examples['test_solution'])} "
+                f"Dataset: {self.dataset_name}. Long tests; batch of {len(batch['test_solution'])} "
                 f"completed in {time.time() - batch_start_time:.2f} seconds."
             )
             batch_start_time = time.time()
-            short_test_results = sandbox.run(examples["short_test_solution"])
+            short_test_results = sandbox.run(batch["short_test_solution"])
             logger.debug(
-                f"Dataset: {self.dataset_name}. Short tests; batch of {len(examples['short_test_solution'])} "
+                f"Dataset: {self.dataset_name}. Short tests; batch of {len(batch['short_test_solution'])} "
                 f"completed in {time.time() - batch_start_time:.2f} seconds."
             )
             for result, short_result in zip(results, short_test_results):
@@ -432,11 +523,12 @@ class MBPPPlusDataset:
                     r"Task ID: (.*)", result.inputs.code.strip().split("\n")[0]
                 )
                 task_id = task_id.group(1) if task_id else ""
+                passed_long_tests = _safe_parse_json_result(result.stdout)
                 # passed_short_tests is a list of Boolean values for each test case
                 passed_short_tests = _safe_parse_json_result(short_result.stdout)
-                if result.failed:
+                if not passed_long_tests or result.failed:
                     logger.error(
-                        f"{self.dataset_name} test failed on task id: {task_id}."
+                        f"{self.dataset_name} long test failed on task id: {task_id}."
                         f" Sandbox used: {result.sandbox_type}."
                         f" Stdout: {result.stdout}."
                         f" Stderr: {result.stderr}."
@@ -450,42 +542,68 @@ class MBPPPlusDataset:
                         f" Stderr: {short_result.stderr}."
                         f" Errors: {short_result.errors}"
                     )
-                passed.append(result.success)
+                long_tests_outcome.append(passed_long_tests or [False])
                 short_tests_outcome.append(passed_short_tests or [False])
             logger.info(
-                f"{self.dataset_name} batch of {len(examples['test_solution'])} "
+                f"{self.dataset_name} batch of {len(batch['test_solution'])} "
                 f"completed in {time.time() - batch_start_time:.2f} seconds."
             )
-        overall_pass_rate = sum(passed) / len(passed)
+        task_level_pass_long_tests = sum(
+            all(task_tests) for task_tests in long_tests_outcome
+        )
         task_level_pass_short_tests = sum(
             all(task_tests) for task_tests in short_tests_outcome
         )
-        # Flatten the short_tests_outcome list-of-lists into a single list
+        # Flatten the list-of-lists into a single list
+        all_long_tests = []
         all_short_tests = []
+        for task_tests in long_tests_outcome:
+            all_long_tests.extend(task_tests)
+        test_level_pass_long_tests = sum(all_long_tests)
         for task_tests in short_tests_outcome:
             all_short_tests.extend(task_tests)
         test_level_pass_short_tests = sum(all_short_tests)
 
         logger.info(
-            f"{self.dataset_name} overall pass rate on long tests: {sum(passed)}/{len(passed)} "
-            f"({overall_pass_rate:.1%})"
+            f"{self.dataset_name} task level pass rate on long tests: "
+            f"{task_level_pass_long_tests}/{len(long_tests_outcome)} "
+            f"({task_level_pass_long_tests / len(long_tests_outcome):.1%})"
         )
         logger.info(
-            f"{self.dataset_name} task level pass rate on short tests: {task_level_pass_short_tests}/{len(short_tests_outcome)} "
+            f"{self.dataset_name} test level pass rate on long tests: "
+            f"{test_level_pass_long_tests}/{len(all_long_tests)} "
+            f"({test_level_pass_long_tests / len(all_long_tests):.1%})"
+        )
+        logger.info(
+            f"{self.dataset_name} task level pass rate on short tests: "
+            f"{task_level_pass_short_tests}/{len(short_tests_outcome)} "
             f"({task_level_pass_short_tests / len(short_tests_outcome):.1%})"
         )
         logger.info(
-            f"{self.dataset_name} test level pass rate on short tests: {test_level_pass_short_tests}/{len(all_short_tests)} "
+            f"{self.dataset_name} test level pass rate on short tests: "
+            f"{test_level_pass_short_tests}/{len(all_short_tests)} "
             f"({test_level_pass_short_tests / len(all_short_tests):.1%})"
         )
+        overall_pass_rate_long_tests = task_level_pass_long_tests / len(
+            long_tests_outcome
+        )
+        overall_pass_rate_short_tests = task_level_pass_short_tests / len(
+            short_tests_outcome
+        )
         logger.info(
-            f"{self.dataset_name} overall pass rate: {overall_pass_rate:.1%} "
-            f"{sum(passed)}/{len(passed)}"
+            f"{self.dataset_name} overall pass rate on long tests: "
+            f"{overall_pass_rate_long_tests:.1%} "
+            f"{task_level_pass_long_tests}/{len(long_tests_outcome)}"
+        )
+        logger.info(
+            f"{self.dataset_name} overall pass rate on short tests: "
+            f"{overall_pass_rate_short_tests:.1%} "
+            f"{task_level_pass_short_tests}/{len(short_tests_outcome)}"
         )
         logger.info(
             f"{self.dataset_name} overall execution time: {time.time() - overall_start_time:.2f} seconds."
         )
-        return overall_pass_rate
+        return overall_pass_rate_long_tests
 
 
 if __name__ == "__main__":
