@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass, field
-
-from PIL.ImagePath import Path
+from pathlib import Path
 
 
 @dataclass
