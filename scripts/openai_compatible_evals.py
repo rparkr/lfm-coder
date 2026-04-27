@@ -15,6 +15,7 @@ MODEL_NAME = "lfm2.5-instruct"
 # MODEL_NAME = "lfm2.5-thinking"
 # MODEL_NAME = "qwen3.5:4b"
 # MODEL_NAME = "qwen3:0.6b"
+# MODEL_NAME = "qwen3.5:0.8b"
 MODEL_ID = f"{MODEL_NAME}-q4_k_m-baseline"
 
 evaluator = OpenAICompatibleEvaluator(

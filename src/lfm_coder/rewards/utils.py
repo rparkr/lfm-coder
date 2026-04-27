@@ -8,7 +8,66 @@ libraries).
 I based these functions on the ones used in HumanEval+ and MBPP+ for compatibility.
 """
 
-from typing import Any, TypeGuard, cast
+import re
+from typing import Any, Literal, TypeGuard, cast
+
+
+def extract_code(
+    completion: str,
+    strategy: Literal["last", "all"] = "last",
+) -> tuple[str | None, bool]:
+    """Extract code from the last fenced code block in the LLM's response.
+
+    If no Python fenced code blocks are found, this will attempt to extract an
+    unlabeled fenced code block, and finally will extract the last "```"-
+    delimited block (if the code block wasn't properly closed).
+
+    Args:
+        completion: The LLM's complete response.
+        strategy: The strategy to use for extracting code.
+            - "last" (default): extract the last code block in the response, prefering
+                the last code block with a function or class definition.
+            - "all": extract all code blocks in the response.
+
+    Returns:
+        Tuple of (extracted_code, correct_format)
+    """
+    for pattern, is_correct_format in zip(
+        [
+            # Prefer complete Python code blocks
+            r"```python\s*(.*?)\s*```",
+            # Fall back to generic code blocks
+            r"```\s*(.*?)\s*```",
+            # Last resort: extract the last "```" delimited block for unclosed code blocks
+            r"```(?:\w*)?\s*(.*)$",
+        ],
+        [
+            # Only complete Python code blocks are considered correct format
+            True,
+            False,
+            False,
+        ],
+    ):
+        code_blocks = re.findall(pattern, completion, re.DOTALL)
+
+        if code_blocks:
+            break
+
+    if strategy == "all":
+        return "\n\n".join(code_blocks), is_correct_format
+
+    # Assume the solution is in the last code block with a function or class
+    # definition, which skips reasoning traces that precede the final solution
+    # and usage examples that follow it.
+    for code_block in code_blocks[::-1]:
+        if "def " in code_block or "class " in code_block:
+            return code_block.strip(), is_correct_format
+
+    # Return the final code block if none had a function or class definition.
+    if code_blocks:
+        return code_blocks[-1].strip(), is_correct_format
+
+    return None, is_correct_format
 
 
 def is_float(

@@ -21,7 +21,6 @@ import concurrent.futures
 import datetime
 import json
 import math
-import re
 from abc import ABC, abstractmethod
 from dataclasses import asdict
 from pathlib import Path
@@ -29,6 +28,7 @@ from typing import Any
 
 from tqdm import tqdm
 
+from lfm_coder import rewards
 from lfm_coder.datasets.eval_data import HumanEvalPlusDataset, MBPPPlusDataset
 from lfm_coder.evals.types import (
     Checkpoint,
@@ -38,7 +38,6 @@ from lfm_coder.evals.types import (
     TaskResult,
 )
 from lfm_coder.logging_utils import get_logger
-from lfm_coder.rewards.helpers import pass_rate
 from lfm_coder.sandbox import Sandbox, SandboxType
 
 logger = get_logger(__name__)
@@ -326,7 +325,16 @@ class Evaluator(ABC):
             task_id = batch["task_id"][i]
             test_template = batch["test"][i]
 
-            extracted_code, correct_format = self._extract_code(result.completion)
+            # TODO (Ryan Parker, 2026-04-24): For HumanEval, I need to consider how to handle
+            # the extraction since the prompts expect the model to simply continue with the
+            # function body rather than starting at the signature within a code block.
+            # Some ideas:
+            #   1. For HumanEval, concatenate the function signature with the model's completion.
+            #   2. For both datasets, concatenate all Python code blocks from the completion as
+            #      long as they are part of the model's final answer rather than the reasoning trace.
+            extracted_code, correct_format = rewards.extract_code(
+                result.completion, strategy="last"
+            )
 
             # Format the code block to be executed in the sandbox. This includes the
             # model's generated code (the "solution") followed by the test cases, and it
@@ -372,7 +380,7 @@ class Evaluator(ABC):
                 # For HumanEval, stdout is a dict with a 'passed' key
                 if isinstance(outcome, list):
                     batch_results[i].passed = all(outcome)
-                    batch_results[i].pass_rate = pass_rate(outcome)
+                    batch_results[i].pass_rate = rewards.pass_rate(outcome)
                 elif isinstance(outcome, dict):
                     batch_results[i].passed = outcome.get("passed", False)
                 else:
@@ -384,50 +392,6 @@ class Evaluator(ABC):
                     ].error_message = f"Sandbox failed: {exec_res.errors}"
 
         return batch_results
-
-    # TODO (Ryan Parker, 2026-04-24): Consider handling multiple Python fenced code
-    # blocks because sometimes the model will write a solution and then provide test
-    # cases for it. If we extract just the last code block, it might be the test cases
-    # instead of the solution. Also, for HumanEval, I need to consider how to handle
-    # the extraction since the prompts expect the model to simply continue with the
-    # function body rather than starting at the signature within a code block.
-    # Some ideas:
-    #   1. For HumanEval, concatenate the function signature with the model's completion.
-    #   2. For both datasets, concatenate all Python code blocks from the completion as
-    #      long as they are part of the model's final answer (that is, not inside of
-    #      the <think> and </think> tags for reasoning models).
-    def _extract_code(self, completion: str) -> tuple[str | None, bool]:
-        """Extract code from the last fenced code block in the LLM's response.
-
-        If no Python fenced code blocks are found, this will attempt to extract an
-        unlabeled fenced code block, and finally will extract the last "```"-
-        delimited block (if the code block wasn't properly closed).
-
-        Args:
-            completion: The LLM's complete response.
-
-        Returns:
-            Tuple of (extracted_code, correct_format)
-        """
-        for pattern, correct_format in zip(
-            [r"```python\n(.*?)\n```", r"```\n(.*?)\n```"],
-            # Only complete Python codeblocks are considered the correct format since
-            # the instructions specify to write Python code.
-            [True, False],
-        ):
-            matches = list(re.finditer(pattern, completion, re.DOTALL))
-            if matches:
-                code = matches[-1].group(1).strip()
-                return code, correct_format
-
-        # Extract the final part of the response if there is an opening fence but no
-        # closing one.
-        for pattern in ["```python", "```"]:
-            if pattern in completion:
-                code = completion.split(pattern)[-1].strip()
-                return code, False
-
-        return None, False
 
     def _safe_parse_json_result(self, stdout: str | None) -> dict | list | None:
         """Safely parse the last line of JSON from the sandbox output.

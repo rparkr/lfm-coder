@@ -13,7 +13,9 @@ Example usage:
     ...     api_key="ollama",
     ... )
     >>> results = evaluator.evaluate(dataset_names=["human_eval", "mbpp"])
-    >>> print(f"HumanEval pass rate: {results.metrics['human_eval'].pass_rate:.1%}")
+    >>> print(
+    ...     f"HumanEval pass rate: {results.metrics['human_eval'].pass_rate:.1%}"
+    ... )
     >>> print(f"MBPP pass rate: {results.metrics['mbpp'].pass_rate:.1%}")
     >>> pprint(results.metrics, indent=2)
 """
@@ -102,10 +104,12 @@ class OpenAICompatibleEvaluator(Evaluator):
                 "temperature": self.temperature,
                 "max_tokens": self.max_tokens,
                 "stream": False,
-                # Disable thinking for reasoning models. This codebase focuses on
-                # improving code generation capabilities for instruct-tuned models
-                # that have fast response times compared to reasoning models.
-                "chat_template_kwargs": {"enable_thinking": False},
+                # NOTE (Ryan Parker, 2026-04-24): It seems like the below setting
+                # omits the reasoning tokens from the output, but they are still
+                # generated, which takes longer at inference time. I noticed that
+                # behavior on lfm2.5-thinking, but perhaps it works with Qwen3.5.
+                # Disable thinking for reasoning models for faster inference.
+                # "chat_template_kwargs": {"enable_thinking": False},
             }
             payload.update(kwargs)
 

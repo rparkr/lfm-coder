@@ -20,40 +20,6 @@ class MockEvaluator(Evaluator):
         ] * len(prompts)
 
 
-def test_code_extraction():
-    evaluator = MockEvaluator(model_name="test_model", model_id="test_model-baseline")
-
-    # Test simple python block
-    completion = "Here is the code:\n```python\ndef add(a, b):\n    return a + b\n```"
-    code, success = evaluator._extract_code(completion)
-    assert code == "def add(a, b):\n    return a + b"
-    assert success is True
-
-    # Test last block
-    completion = "First:\n```python\nold()\n```\nSecond:\n```python\nnew()\n```"
-    code, success = evaluator._extract_code(completion)
-    assert code == "new()"
-    assert success is True
-
-    # Test generic block
-    completion = "```\nprint('hello')\n```"
-    code, success = evaluator._extract_code(completion)
-    assert code == "print('hello')"
-    assert success is False
-
-    # Test unclosed block
-    completion = "Reasoning... ```python\ndef incomplete():"
-    code, success = evaluator._extract_code(completion)
-    assert code == "def incomplete():"
-    assert success is False
-
-    # Test no block
-    completion = "No code here."
-    code, success = evaluator._extract_code(completion)
-    assert code is None
-    assert success is False
-
-
 def test_metric_calculation(tmp_path):
     evaluator = MockEvaluator(
         model_name="test_model", model_id="test_model-baseline", output_dir=tmp_path

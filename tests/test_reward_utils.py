@@ -1,7 +1,56 @@
-"""Unit tests for the helpers module."""
+"""Unit tests for the utils module."""
 
 import pytest
-from lfm_coder.rewards.helpers import is_float, is_close, is_correct
+
+from lfm_coder.rewards.utils import extract_code, is_close, is_correct, is_float
+
+
+class TestExtractCode:
+    """Test cases for the extract_code function."""
+
+    def test_simple_python_block(self):
+        """Test simple python block."""
+        completion = (
+            "Here is the code:\n```python\ndef add(a, b):\n    return a + b\n```"
+        )
+        code, success = extract_code(completion)
+        assert code == "def add(a, b):\n    return a + b"
+        assert success is True
+
+    def test_last_block(self):
+        """Test last block."""
+        completion = "First:\n```python\nold()\n```\nSecond:\n```python\nnew()\n```"
+        code, success = extract_code(completion)
+        assert code == "new()"
+        assert success is True
+
+    def test_generic_block(self):
+        """Test generic block."""
+        completion = "```\nprint('hello')\n```"
+        code, success = extract_code(completion)
+        assert code == "print('hello')"
+        assert success is False
+
+    def test_unclosed_block(self):
+        """Test unclosed block."""
+        completion = "Reasoning... ```python\ndef incomplete():"
+        code, success = extract_code(completion)
+        assert code == "def incomplete():"
+        assert success is False
+
+    def test_no_block(self):
+        """Test no block."""
+        completion = "No code here."
+        code, success = extract_code(completion)
+        assert code is None
+        assert success is False
+
+    def test_all_blocks(self):
+        """Test extracting all blocks."""
+        completion = "First:\n```python\nold()\n```\nSecond:\n```python\nnew()\n```"
+        code, success = extract_code(completion, strategy="all")
+        assert code == "old()\n\nnew()"
+        assert success is True
 
 
 class TestIsFloat:

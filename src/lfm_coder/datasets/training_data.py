@@ -11,17 +11,16 @@ import datasets
 from tqdm import tqdm
 
 from lfm_coder.logging_utils import get_logger
-from lfm_coder.rewards.helpers import pass_rate
+from lfm_coder.rewards.utils import pass_rate
 from lfm_coder.sandbox import Sandbox, SandboxExecution, SandboxType
 
-SEED: int = int(os.getenv("RANDOM_SEED", "12"))
 TRAINING_DATASET_NAME = "OpenCoder-LLM/opc-sft-stage2"
 TRAINING_DATASET_SPLIT = "educational_instruct"
 SAVED_DATASET_PATH = Path(__file__).parent.parent.parent.parent / "data/training"
 ADDITIONAL_INSTRUCTIONS = textwrap.dedent(
     """
     When writing your code, use only standard Python with no external libraries or
-    built-in modules except for `asyncio.gather`, `dataclasses`, `datetime`, `json`, `math`, `os`, `re`, `sys`, and `typing`.
+    built-in modules except for `asyncio.gather`, `dataclasses`, `datetime`, `json`, `math`, `os`, `re`, `sys`, or `typing` if needed.
 
     Name the function `{function_name}`.
 
@@ -65,7 +64,7 @@ class TrainingDataset:
     loading and accessing the data.
     """
 
-    def __init__(self, seed: int = SEED, num_samples: int = 10_000):
+    def __init__(self, seed: int | None = None, num_samples: int = 10_000):
         """
         Create an interface for loading the training dataset.
 
@@ -176,8 +175,10 @@ class TrainingDataset:
             2. Return the results of the tests, which later can be converted to a score
                (num_correct / num_tests)
             """
+            # Wrap in bool() to catch cases where the test returns a re.Match object and
+            # the assertion was simply `assert <match_object>` without any equality checks.
             testcases = [
-                testcase.strip().replace("assert ", "")
+                f"bool({testcase.replace('assert ', '').strip()})"
                 for testcase in example["testcase"]
                 if testcase.strip() and testcase.strip().startswith("assert")
             ]
@@ -218,15 +219,13 @@ class TrainingDataset:
             )
 
         logger.debug("Removing columns that are no longer needed")
-        ds = ds.remove_columns(
-            [
-                "instruction",
-                "output",
-                "code",
-                "entry_point",
-                "testcase",
-            ]
-        )
+        ds = ds.remove_columns([
+            "instruction",
+            "output",
+            "code",
+            "entry_point",
+            "testcase",
+        ])
 
         return ds
 
@@ -276,16 +275,14 @@ class TrainingDataset:
                             f"Error running test solution. Sequence ID: {seq_id}. "
                             f"Errors: {'. '.join(err.message for err in (execution.errors or []))}"
                         )
-                        skipped_examples.append(
-                            {
-                                "seq_id": seq_id,
-                                "errors": ". ".join(
-                                    err.message for err in (execution.errors or [])
-                                ),
-                                "sandbox_type": execution.sandbox_type.value,
-                                "code": test_solution,
-                            }
-                        )
+                        skipped_examples.append({
+                            "seq_id": seq_id,
+                            "errors": ". ".join(
+                                err.message for err in (execution.errors or [])
+                            ),
+                            "sandbox_type": execution.sandbox_type.value,
+                            "code": test_solution,
+                        })
                         continue
 
                     # Parse the test results from stdout (both sandboxes print it)
@@ -293,26 +290,22 @@ class TrainingDataset:
                         output_parts = execution.stdout.strip().split("\n")
                         # Assume the last line is our JSON output
                         results = json.loads(output_parts[-1])
-                        test_results.append(
-                            {
-                                "seq_id": seq_id,
-                                "test_results": results,
-                                "sandbox_type": execution.sandbox_type.value,
-                            }
-                        )
+                        test_results.append({
+                            "seq_id": seq_id,
+                            "test_results": results,
+                            "sandbox_type": execution.sandbox_type.value,
+                        })
                     except (json.JSONDecodeError, IndexError) as e:
                         logger.error(
                             f"Failed to parse test results from stdout. Seq ID: {seq_id}. "
                             f"Stdout: {execution.stdout!r}. Error: {e}"
                         )
-                        skipped_examples.append(
-                            {
-                                "seq_id": seq_id,
-                                "errors": f"Output parsing error: {e}",
-                                "sandbox_type": execution.sandbox_type.value,
-                                "code": test_solution,
-                            }
-                        )
+                        skipped_examples.append({
+                            "seq_id": seq_id,
+                            "errors": f"Output parsing error: {e}",
+                            "sandbox_type": execution.sandbox_type.value,
+                            "code": test_solution,
+                        })
 
             except Exception as e:
                 logger.error(f"Unexpected error when running code batch. Error: {e}")
@@ -329,9 +322,9 @@ class TrainingDataset:
                 skipped_examples=skipped_examples,
             )
 
-        overall_pass_rate = pass_rate(
-            [all(result["test_results"]) for result in test_results]
-        )
+        overall_pass_rate = pass_rate([
+            all(result["test_results"]) for result in test_results
+        ])
         # The pass rate for individual test cases across all problems, where we consider
         # each test case separately and calculate the pass rate across all of them.
         all_test_results = []
@@ -355,15 +348,13 @@ class TrainingDataset:
 
 
 if __name__ == "__main__":
-    results = TrainingDataset().verify_test_solution(
+    results = TrainingDataset(seed=12, num_samples=1_000).verify_test_solution(
         batch_size=20, sandbox_type=SandboxType.AUTO
     )
-    pprint(
-        {
-            "overall_pass_rate": results.overall_pass_rate,
-            "test_level_pass_rate": results.test_level_pass_rate,
-            "monty_count": results.monty_count,
-            "docker_count": results.docker_count,
-            "skipped_examples": len(results.skipped_examples or []),
-        }
-    )
+    pprint({
+        "overall_pass_rate": results.overall_pass_rate,
+        "test_level_pass_rate": results.test_level_pass_rate,
+        "monty_count": results.monty_count,
+        "docker_count": results.docker_count,
+        "skipped_examples": len(results.skipped_examples or []),
+    })
