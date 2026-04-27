@@ -55,3 +55,9 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == '__main__':",
 ]
+
+[tool.ruff.format]
+# "preview" enables Markdown file formatting
+preview = true
+docstring-code-format = true
+docstring-code-line-length = 72
