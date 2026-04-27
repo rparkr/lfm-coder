@@ -11,8 +11,8 @@ from typing import cast
 import datasets
 from tqdm import tqdm
 
+from lfm_coder import rewards
 from lfm_coder.logging_utils import get_logger
-from lfm_coder.rewards import helpers
 from lfm_coder.sandbox import Sandbox, SandboxType
 
 logger = get_logger(__name__)
@@ -23,7 +23,7 @@ EVAL_DATASET_ROOT = Path(__file__).parent.parent.parent.parent / "data/evaluatio
 def get_helpers_source() -> str:
     """Load helper function source code as a string for inserting before test cases."""
     source_parts = ["from typing import Any, TypeGuard, cast"]
-    for func in [helpers.is_float, helpers.is_close, helpers.is_correct]:
+    for func in [rewards.is_float, rewards.is_close, rewards.is_correct]:
         source_parts.append(inspect.getsource(func))
     return "\n\n".join(source_parts)
 
@@ -104,7 +104,8 @@ class HumanEvalPlusDataset:
                 )
 
             formatted_tests = (
-                textwrap.dedent(
+                textwrap
+                .dedent(
                     """
                     # Task ID: {task_id}
                     import json
@@ -248,7 +249,7 @@ class MBPPPlusDataset:
         self.ADDITIONAL_INSTRUCTIONS = textwrap.dedent(
             """
             When writing your code, use only standard Python with no external libraries or
-            built-in modules except for `asyncio.gather`, `dataclasses`, `datetime`, `json`, `math`, `os`, `re`, `sys`, and `typing`.
+            built-in modules except for `asyncio.gather`, `dataclasses`, `datetime`, `json`, `math`, `os`, `re`, `sys`, or `typing` if needed.
 
             Name the function `{function_name}`.
 
@@ -388,7 +389,8 @@ class MBPPPlusDataset:
 
             # Check solution against the tests
             formatted_tests = (
-                textwrap.dedent(
+                textwrap
+                .dedent(
                     """
                     # Task ID: {task_id}
                     import json
@@ -420,7 +422,8 @@ class MBPPPlusDataset:
             short_test_list = "[" + ", ".join(test_cases) + "]"
 
             formatted_short_tests = (
-                textwrap.dedent(
+                textwrap
+                .dedent(
                     """
                     # Task ID: {task_id}
                     import json
@@ -603,6 +606,8 @@ class MBPPPlusDataset:
         logger.info(
             f"{self.dataset_name} overall execution time: {time.time() - overall_start_time:.2f} seconds."
         )
+        print(f"Overall pass rate on long tests: {overall_pass_rate_long_tests}")
+        print(f"Overall pass rate on short tests: {overall_pass_rate_short_tests}")
         return overall_pass_rate_long_tests
 
 

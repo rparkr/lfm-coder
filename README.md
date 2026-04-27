@@ -61,7 +61,7 @@ This project uses the following HuggingFace datasets for training and evaluation
 - [x] **Training Dataset Processing**: Sampling, augmenting instructions, formatting in messages format, verifying correctness
 - [x] **Evaluation Dataset Processing**: Processing and verification of evaluation data
 - [x] **Reward Helper Functions**: Helper functions for RLVR reward computation
-- [x] **Test Suite**: Coverage of sandbox methods and reward helpers
+- [x] **Test Suite**: Coverage of sandbox methods and reward utilities
 
 ## 🚧 Coming soon
 

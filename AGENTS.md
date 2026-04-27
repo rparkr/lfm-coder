@@ -57,4 +57,4 @@
 ## Testing Quirks
 
 - Sandbox tests verify auto-fallback behavior
-- Reward helpers tested in `tests/test_helpers.py`
+- Reward utilities tested in `tests/test_reward_utils.py`
