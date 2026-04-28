@@ -9,11 +9,11 @@ from lfm_coder.train.config import load_config
 from lfm_coder.train.rewards import CodingAccuracyReward
 from lfm_coder.train.trainer import setup_trainer
 
-app = typer.Typer(help="LFM-Coder Training CLI")
+app = typer.Typer(help="LFM-Coder Training CLI", no_args_is_help=True)
 logger = get_logger(__name__)
 
 
-@app.command()
+@app.command(help="Train a model using GRPO")
 def train(
     config_path: str = typer.Option(
         "training_config.toml", help="Path to the TOML configuration file"
@@ -26,9 +26,9 @@ def train(
     ),
 ):
     """
-    Train the LFM model using GRPO.
+    Train a model using GRPO.
     """
-    if not os.path.exists(config_path):
+    if not Path(config_path).exists():
         logger.error(f"Config file not found at {config_path}")
         raise typer.Exit(code=1)
 
