@@ -351,9 +351,10 @@ class DockerSandbox:
             if input_files:
                 for path in input_files:
                     if path.exists():
-                        docker_cmd.extend(
-                            ["--volume", f"{path.absolute()}:/sandbox/{path.name}:ro,Z"]
-                        )
+                        docker_cmd.extend([
+                            "--volume",
+                            f"{path.absolute()}:/sandbox/{path.name}:ro,Z",
+                        ])
                     else:
                         logger.warning(
                             f"Input file {path} does not exist, skipping mount."
@@ -369,9 +370,13 @@ class DockerSandbox:
             if self.disable_network:
                 docker_cmd.extend(["--network", "none"])
 
-            docker_cmd.extend(
-                [self.image_name, "uv", "run", "--script", "/sandbox/code.py"]
-            )
+            docker_cmd.extend([
+                self.image_name,
+                "uv",
+                "run",
+                "--script",
+                "/sandbox/code.py",
+            ])
 
             try:
                 result = subprocess.run(
@@ -390,7 +395,7 @@ class DockerSandbox:
                     error = SandboxMemoryError("Memory limit exceeded (OOM)")
                 elif exit_code != 0:
                     error = SandboxRuntimeError(
-                        f"Execution failed with exit code {exit_code}"
+                        f"Execution failed with exit code {exit_code}: {stderr}"
                     )
 
             except subprocess.TimeoutExpired as e:

@@ -30,3 +30,6 @@ dist/
 # source control.
 .agent/skills/openspec*
 .claude/skills/openspec*
+
+# Checkpoints (these are uploaded to Hugging Face, but not to GitHub)
+rparkr/LFM2.5-1.2B-Instruct-Coding/*

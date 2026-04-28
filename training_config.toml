@@ -1,0 +1,74 @@
+# Training Configuration for lfm-coder
+
+# Model repository and name (Hugging Face)
+model_id = "LiquidAI/LFM2.5-1.2B-Instruct"
+
+# New model repository and name (for uploading to Hugging Face)
+output_dir = "rparkr/LFM2.5-1.2B-Instruct-Coding"
+
+# The trainer will automatically resume training when the same run_name and output_dir are re-used.
+# Set resume_training to true to enable this, or false to start from scratch.
+run_name = "LFM2.5-1.2B-Instruct-Coding"
+resume_training = true
+
+# Random seed for sampling the training dataset (comment out for random)
+seed = 12
+
+# Number of records to sample for training
+num_train_records = 1_000
+
+# Batch size and accumulation
+batch_size = 4
+gradient_accumulation_steps = 2
+
+# Number of completions in a group for each batch
+num_generations = 8
+
+# Evaluation and Checkpointing intervals
+eval_steps = 100
+save_steps = 10
+
+# Hyperparameters
+# learning_rate = 1e-5
+# Temperature is the recommended setting from the model card: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct#:~:text=Generation%20parameters
+temperature = 0.1
+max_completion_length = 4096
+
+# GRPO Config
+# See the docs for reference: https://huggingface.co/docs/trl/en/grpo_trainer
+loss_type = "dr_grpo"
+scale_rewards = "batch"
+use_liger_kernel = true
+
+[lora]
+rank = 32
+alpha = 32
+# Target all of the linear layers in the model for better performance
+target_modules = ["q_proj", "k_proj", "v_proj", "out_proj", "in_proj", "w1", "w2", "w3"]
+
+[bnb]
+load_in_4bit = true
+bnb_4bit_quant_type = "nf4"
+bnb_4bit_use_double_quant = true
+bnb_4bit_compute_dtype = "bfloat16"
+
+[sandbox]
+# "auto": tries to use the fast monty interpreter; falls back to Docker if needed
+# "monty": uses the extremely fast sandbox based on Pydantic Monty with no fallback
+type = "auto"
+max_memory_mb = 64
+max_execution_time_sec = 10
+# Set to true if the code needs internet access to install packages imported by the
+# LLM-written code (applies only to the Docker sandbox).
+network_access = false
+# Cache installed packages with uv to prevent re-downloading. Once cached,
+# packages are available without internet access.
+use_cache = true
+
+[rewards]
+# Use binary (0 or 1) or percentage-based reward (0-1) based on the number of passing tests.
+binary_reward = false
+
+[tracking]
+trackio_space_id = "rparkr/lfm-coder-training"
+trackio_project = "lfm-coder-training"
