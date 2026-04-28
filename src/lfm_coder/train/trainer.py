@@ -1,5 +1,6 @@
 import datetime
 import os
+from pathlib import Path
 
 import torch
 from datasets import Dataset
@@ -44,7 +45,8 @@ def setup_trainer(
     model = AutoModelForCausalLM.from_pretrained(
         config.model_id,
         quantization_config=bnb_config,
-        dtype="auto",
+        dtype=config.bnb.bnb_4bit_compute_dtype,
+        torch_dtype=getattr(torch, config.bnb.bnb_4bit_compute_dtype),
         device_map="auto",
         # Requires installation of flash-attn, but can speed up training and reduce memory usage:
         # attn_implementation="flash_attention_2",
@@ -119,9 +121,10 @@ def setup_trainer(
             model_id=f"{config.model_id.split('/')[-1]}-grpo",
             model=model,
             tokenizer=tokenizer,  # ty:ignore[invalid-argument-type]
-            output_dir=os.path.join(config.output_dir, "eval_results"),
-            batch_size=config.batch_size,
+            output_dir=Path(config.output_dir) / "eval_results",
+            # batch_size=config.batch_size,
             max_tokens=config.max_completion_length,
+            temperature=0.0,
         )
 
         class PeriodicEvalCallback(TrainerCallback):

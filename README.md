@@ -55,11 +55,11 @@ The training module uses Group Relative Policy Optimization (GRPO) to fine-tune 
    ```
 3. **Run Training**:
    ```bash
-   uv run lfm-coder train --config training_config.toml
+   uv run lfm-coder --config training_config.toml
    ```
 4. **Dry Run**: To verify your configuration and environment before a full run:
    ```bash
-   uv run lfm-coder train --config training_config.toml --dry-run
+   uv run lfm-coder --config training_config.toml --dry-run
    ```
 
 ## Hardware Requirements
