@@ -3,7 +3,7 @@
 The lfm-coder project trains models using GRPO with RLVR via TRL. Currently, there's no way to measure model performance during training. The project has:
 - Two evaluation datasets: HumanEvalPlus and MBPPPlus (in `src/lfm_coder/datasets/eval_data.py`)
 - A unified Sandbox for code execution (in `src/lfm_coder/sandbox/sandbox.py`)
-- Reward helpers for pass rate calculation (in `src/lfm_coder/rewards/helpers.py`)
+- Reward utilities for pass rate calculation (in `src/lfm_coder/rewards/utils.py`)
 
 The evaluation module needs to:
 1. Generate code completions from a model

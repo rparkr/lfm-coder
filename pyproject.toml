@@ -6,23 +6,26 @@ readme = "README.md"
 authors = [{ name = "Ryan Parker" }]
 requires-python = ">=3.13"
 dependencies = [
-    # Quantized training
-    "bitsandbytes>=0.49.2",
     # Loading HuggingFace datasets for training and evaluation
     "datasets>=4.6.1",
     # HTTP client for async evaluation on OpenAI-compatible endpoints
     "httpx>=0.28.1",
-    # Faster model training through optimized Triton kernels
-    "liger-kernel>=0.7.0",
+    # Data validation
+    "pydantic>=2.13.3",
     # Sandboxing model-generated Python code
     "pydantic-monty>=0.0.15",
     # Progress bars
     "tqdm>=4.67.3",
     # Tracking experiments (native integration with TRL)
     "trackio[gpu,spaces]>=0.18.0",
-    # Transformers-based RL training with QLoRA
-    "trl[peft]>=0.29.0",
+    # Transformers-based RL training with QLoRA. Also installs peft, liger-kernel, and bitsandbytes
+    "trl[peft,liger,quantization]>=0.29.0",
+    # CLI framework for the training module
+    "typer>=0.25.0",
 ]
+
+[project.scripts]
+lfm-coder = "lfm_coder.train.__main__:app"
 
 [dependency-groups]
 dev = [

@@ -37,8 +37,34 @@ print(result.stdout)
 # Batch execution (parallel)
 results = sb.run(["1+1", "2+2", "3+3"])
 for r in results:
-    print(r.output)
+    print(r.stdout)
 ```
+
+---
+
+# Training
+
+The training module uses Group Relative Policy Optimization (GRPO) to fine-tune the model.
+
+## Usage
+
+1. **Configure**: Edit `training_config.toml` in the project root to set your model IDs, LoRA parameters, and sandbox settings.
+2. **Environment**: Set the `HF_TOKEN` environment variable if you want to upload the trained model to Hugging Face.
+   ```bash
+   export HF_TOKEN="your_token_here"
+   ```
+3. **Run Training**:
+   ```bash
+   uv run lfm-coder train --config training_config.toml
+   ```
+4. **Dry Run**: To verify your configuration and environment before a full run:
+   ```bash
+   uv run lfm-coder train --config training_config.toml --dry-run
+   ```
+
+## Hardware Requirements
+
+The default configuration is optimized for a **single GPU with 8GB VRAM** (e.g., NVIDIA RTX 4060 laptop). It uses 4-bit QLoRA and Liger kernels to minimize memory usage.
 
 ---
 
@@ -62,16 +88,16 @@ This project uses the following HuggingFace datasets for training and evaluation
 - [x] **Evaluation Dataset Processing**: Processing and verification of evaluation data
 - [x] **Reward Helper Functions**: Helper functions for RLVR reward computation
 - [x] **Test Suite**: Coverage of sandbox methods and reward utilities
+- [x] **Evaluation Module**: Write evaluation module for scoring the model on the evaluation dataset (benchmarks)
+- [x] **Baseline Performance**: Establish the model's baseline performance on the evaluation sets
+- [x] **Training Module**: GRPO training with TRL, verifiable rewards, and 8GB VRAM optimization
+- [x] **Config Files**: TOML configuration for training, LoRA, and sandbox parameters
+- [x] **Experiment Tracking**: Integration with `trackio` for HF Space logging
 
 ## 🚧 Coming soon
 
-- [ ] **Evaluation Module**: Write evaluation module for scoring the model on the evaluation dataset (benchmarks)
-- [ ] **Baseline Performance**: Establish the model's baseline performance on the evaluation sets
-- [ ] **Training Script**: Create training script using TRL
-- [ ] **Checkpointing & Metrics**: Add checkpointing and metric collection (evaluation set performance)
-- [ ] **Run Training**: Execute the training process
+- [ ] **Run Training**: Execute a full training run
 - [ ] **Publish Results**: Document and publish training results
-- [ ] **Config Files**: Set up configuration files to control the training process (e.g., which model to train, LoRA parameters, training dataset size)
 
 ---
 

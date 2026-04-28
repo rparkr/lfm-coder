@@ -11,7 +11,9 @@ Example usage:
     ...     model_id="qwen3.5-0.8b-q4_k_m-baseline",
     ... )
     >>> results = evaluator.evaluate(dataset_names=["human_eval", "mbpp"])
-    >>> print(f"HumanEval pass rate: {results.metrics['human_eval'].pass_rate:.1%}")
+    >>> print(
+    ...     f"HumanEval pass rate: {results.metrics['human_eval'].pass_rate:.1%}"
+    ... )
     >>> print(f"MBPP pass rate: {results.metrics['mbpp'].pass_rate:.1%}")
     >>> pprint(results.metrics, indent=2)
 """
