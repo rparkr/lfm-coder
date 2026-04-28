@@ -44,8 +44,9 @@ def setup_trainer(
     model = AutoModelForCausalLM.from_pretrained(
         config.model_id,
         quantization_config=bnb_config,
-        torch_dtype=getattr(torch, config.bnb.bnb_4bit_compute_dtype),
+        dtype="auto",
         device_map="auto",
+        # Requires installation of flash-attn, but can speed up training and reduce memory usage:
         # attn_implementation="flash_attention_2",
     )
 
