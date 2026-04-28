@@ -44,7 +44,6 @@ def setup_trainer(
     model = AutoModelForCausalLM.from_pretrained(
         config.model_id,
         quantization_config=bnb_config,
-        dtype=config.bnb.bnb_4bit_compute_dtype,
         torch_dtype=getattr(torch, config.bnb.bnb_4bit_compute_dtype),
         device_map="auto",
         # attn_implementation="flash_attention_2",
