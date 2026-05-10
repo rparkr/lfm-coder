@@ -1,6 +1,7 @@
 # Training Configuration for lfm-coder
 
 # Model repository and name (Hugging Face)
+# This is the base model that will be fine-tuned.
 model_id = "LiquidAI/LFM2.5-1.2B-Instruct"
 
 # New model repository and name (for uploading to Hugging Face)
@@ -17,7 +18,7 @@ seed = 12
 # Number of records to sample for training
 num_train_records = 1_000
 
-# Batch size and accumulation
+# Batch size and accumulation. The effective batch size is batch_size * gradient_accumulation_steps.
 batch_size = 4
 gradient_accumulation_steps = 2
 
@@ -25,16 +26,17 @@ gradient_accumulation_steps = 2
 num_generations = 8
 
 # Evaluation and Checkpointing intervals
-eval_steps = 100
+eval_steps = 1000
 save_steps = 10
 
 # Hyperparameters
-# learning_rate = 1e-5
-# Temperature is the recommended setting from the model card: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct#:~:text=Generation%20parameters
+# "temperature=0.1" is the recommended setting from the model card: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct#:~:text=Generation%20parameters
 temperature = 0.1
 max_completion_length = 4096
+# The default learning rate for GRPO in TRL is 1e-6. See: https://huggingface.co/docs/trl/v1.3.0/en/grpo_trainer#trl.GRPOConfig
+# learning_rate = 1e-5
 
-# GRPO Config
+# Additional GRPO Config settings
 # See the docs for reference: https://huggingface.co/docs/trl/en/grpo_trainer
 loss_type = "dr_grpo"
 scale_rewards = "batch"
@@ -43,18 +45,24 @@ use_liger_kernel = true
 [lora]
 rank = 32
 alpha = 32
-# Target all of the linear layers in the model for better performance
+# Target all of the linear layers in the model for better performance.
+# NOTE: This list is specific to the LFM2.5-1.2B architecture and was obtained from: https://github.com/Liquid4All/cookbook/blob/main/finetuning/notebooks/grpo_for_verifiable_tasks.ipynb
+# To adapt for any other model, set this to "all-linear". See: https://huggingface.co/docs/peft/developer_guides/lora#qlora-style-training
 target_modules = ["q_proj", "k_proj", "v_proj", "out_proj", "in_proj", "w1", "w2", "w3"]
 
 [bnb]
+# Bits and Bytes config. These settings are recommended by the Transformers documentation:
+# See: https://huggingface.co/docs/trl/en/peft_integration#qlora-configuration-options
 load_in_4bit = true
 bnb_4bit_quant_type = "nf4"
 bnb_4bit_use_double_quant = true
 bnb_4bit_compute_dtype = "bfloat16"
 
 [sandbox]
-# "auto": tries to use the fast monty interpreter; falls back to Docker if needed
-# "monty": uses the extremely fast sandbox based on Pydantic Monty with no fallback
+# "auto": tries to use the fast Monty interpreter; falls back to Docker if needed.
+# "monty": uses the extremely fast sandbox based on Pydantic Monty with no fallback.
+# NOTE: Based on a training run on 2026-04-26, about 77% of all sandbox executions ran
+# on Monty, which was about 2,000-5,000x faster than Docker.
 type = "auto"
 max_memory_mb = 64
 max_execution_time_sec = 10
@@ -62,13 +70,19 @@ max_execution_time_sec = 10
 # LLM-written code (applies only to the Docker sandbox).
 network_access = false
 # Cache installed packages with uv to prevent re-downloading. Once cached,
-# packages are available without internet access.
+# packages are available without internet access. If network_access is false and
+# use_cache is true, then only packages that have been previously cached will be
+# available.
 use_cache = true
 
 [rewards]
-# Use binary (0 or 1) or percentage-based reward (0-1) based on the number of passing tests.
+# Choose the type of reward to use. Binary rewards are either 0 (if any tests fail)
+# or 1 (if all tests pass). Percentage-based rewards are between 0 and 1 and are based
+# on the number of passing tests, providing a finer-grained reward signal.
 binary_reward = false
 
 [tracking]
+# Set the Hugging Face spaces ID and project name where metrics will be tracked and
+# viewable during and after training.
 trackio_space_id = "rparkr/lfm-coder-training"
 trackio_project = "lfm-coder-training"

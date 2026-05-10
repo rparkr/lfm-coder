@@ -93,6 +93,18 @@ class Sandbox:
             image_name=image_name,
         )
 
+    def __repr__(self) -> str:
+        return (
+            f"Sandbox("
+            f"max_duration_sec={self.max_duration_sec}, "
+            f"max_memory_mb={self.max_memory_mb}, "
+            f"max_cpus={self.max_cpus}, "
+            f"disable_network={self.disable_network}, "
+            f"use_cache={self.use_cache}, "
+            f"image_name={self.image_name!r}, "
+            f"sandbox_type={self.sandbox_type.value!r})"
+        )
+
     @property
     def max_duration_sec(self) -> float | None:
         return self.monty.max_duration_sec

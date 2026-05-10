@@ -1,7 +1,7 @@
 [project]
 name = "lfm-coder"
 version = "0.1.0"
-description = "Using GRPO with RLVR, train Liquid AI's LFM2.5-instruct model to enhance coding capabilities"
+description = "Using GRPO with RLVR, fine-tune LLMs to enhance coding capabilities"
 readme = "README.md"
 authors = [{ name = "Ryan Parker" }]
 requires-python = ">=3.13"
@@ -43,6 +43,7 @@ build-backend = "uv_build"
 source-include = [
     "src/lfm_coder/sandbox/Dockerfile.sandbox",
     "src/lfm_coder/sandbox/module_mapping.json",
+    "training_config.toml",
 ]
 
 [tool.pytest.ini_options]

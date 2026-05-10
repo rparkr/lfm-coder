@@ -13,7 +13,7 @@ app = typer.Typer(help="LFM-Coder Training CLI", no_args_is_help=True)
 logger = get_logger(__name__)
 
 
-@app.command(help="Train a model using GRPO")
+@app.command(help="Train a model using GRPO", no_args_is_help=True)
 def train(
     config_path: str = typer.Option(
         "training_config.toml", help="Path to the TOML configuration file"
