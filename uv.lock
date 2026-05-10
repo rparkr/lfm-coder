@@ -684,7 +684,7 @@ wheels = [
 
 [[package]]
 name = "lfm-coder"
-version = "0.1.0"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "datasets" },
@@ -713,7 +713,7 @@ requires-dist = [
     { name = "pydantic-monty", specifier = ">=0.0.15" },
     { name = "tqdm", specifier = ">=4.67.3" },
     { name = "trackio", extras = ["gpu", "spaces"], specifier = ">=0.18.0" },
-    { name = "trl", extras = ["liger", "peft", "quantization"], specifier = ">=0.29.0" },
+    { name = "trl", extras = ["peft", "liger", "quantization"], specifier = ">=0.29.0" },
     { name = "typer", specifier = ">=0.25.0" },
 ]
 

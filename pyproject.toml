@@ -1,6 +1,6 @@
 [project]
 name = "lfm-coder"
-version = "0.1.1"
+version = "0.1.2"
 description = "Using GRPO with RLVR, fine-tune LLMs to enhance coding capabilities"
 readme = "README.md"
 authors = [{ name = "Ryan Parker" }]
@@ -25,8 +25,8 @@ dependencies = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/rparkr/lfm-coder"
 Repository = "https://github.com/rparkr/lfm-coder"
-Issues = "https://github.com/rparkr/lfm-coder/issues"
 
 [project.scripts]
 lfm-coder = "lfm_coder.train.__main__:app"
