@@ -60,7 +60,10 @@ def setup_trainer(
     )
 
     # 3. Load Model and Tokenizer
-    model_kwargs: dict = {"dtype": compute_dtype}
+    model_kwargs: dict = {
+        "dtype": compute_dtype,
+        "torch_dtype": compute_dtype,
+    }
     if use_quant:
         model_kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=config.bnb.load_in_4bit,
@@ -73,8 +76,6 @@ def setup_trainer(
         model_kwargs["device_map"] = device
 
     model = AutoModelForCausalLM.from_pretrained(config.model_id, **model_kwargs)
-    if not use_quant and device != "cpu":
-        model = model.to(device)
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_id)
     # NOTE: Quiet the type checker; AutoTokenizer can return None, but won't in this case.
