@@ -13,6 +13,7 @@ from transformers import (
 )
 from trl import GRPOConfig, GRPOTrainer
 
+from lfm_coder.device import detect_device, supports_quantization
 from lfm_coder.evals.transformers_evaluator import TransformersEvaluator
 from lfm_coder.logging_utils import get_logger
 from lfm_coder.train.config import TrainingConfig
@@ -33,24 +34,48 @@ def setup_trainer(
     os.environ["TRACKIO_SPACE_ID"] = config.trackio_space_id
     os.environ["TRACKIO_PROJECT"] = config.trackio_project
 
-    # 2. BitsAndBytes Config
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=config.bnb.load_in_4bit,
-        bnb_4bit_quant_type=config.bnb.bnb_4bit_quant_type,
-        bnb_4bit_use_double_quant=config.bnb.bnb_4bit_use_double_quant,
-        bnb_4bit_compute_dtype=getattr(torch, config.bnb.bnb_4bit_compute_dtype),
+    # 2. Resolve hardware backend
+    device = detect_device(config.device)
+    if config.use_quantization is None:
+        use_quant = supports_quantization(device)
+    else:
+        use_quant = config.use_quantization
+        if use_quant and not supports_quantization(device):
+            logger.warning(
+                f"use_quantization=True requested but device={device} does not support "
+                "bitsandbytes; disabling quantization."
+            )
+            use_quant = False
+
+    use_liger = config.use_liger_kernel and device == "cuda"
+    optim = "paged_adamw_8bit" if use_quant else "adamw_torch"
+    compute_dtype = (
+        getattr(torch, config.bnb.bnb_4bit_compute_dtype)
+        if device in ("cuda", "mps")
+        else torch.float32
+    )
+    logger.info(
+        f"Resolved hardware: device={device}, use_quant={use_quant}, "
+        f"optim={optim}, liger={use_liger}, dtype={compute_dtype}"
     )
 
     # 3. Load Model and Tokenizer
-    model = AutoModelForCausalLM.from_pretrained(
-        config.model_id,
-        quantization_config=bnb_config,
-        dtype=config.bnb.bnb_4bit_compute_dtype,
-        torch_dtype=getattr(torch, config.bnb.bnb_4bit_compute_dtype),
-        device_map="auto",
-        # Requires installation of flash-attn, but can speed up training and reduce memory usage:
-        # attn_implementation="flash_attention_2",
-    )
+    model_kwargs: dict = {
+        "dtype": compute_dtype,
+        "torch_dtype": compute_dtype,
+    }
+    if use_quant:
+        model_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=config.bnb.load_in_4bit,
+            bnb_4bit_quant_type=config.bnb.bnb_4bit_quant_type,
+            bnb_4bit_use_double_quant=config.bnb.bnb_4bit_use_double_quant,
+            bnb_4bit_compute_dtype=getattr(torch, config.bnb.bnb_4bit_compute_dtype),
+        )
+        model_kwargs["device_map"] = "auto"
+    else:
+        model_kwargs["device_map"] = device
+
+    model = AutoModelForCausalLM.from_pretrained(config.model_id, **model_kwargs)
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_id)
     # NOTE: Quiet the type checker; AutoTokenizer can return None, but won't in this case.
@@ -80,7 +105,7 @@ def setup_trainer(
         run_name = f"dry-run-{run_name}-{timestamp}"
 
     grpo_config = GRPOConfig(
-        optim="paged_adamw_8bit",
+        optim=optim,
         output_dir=config.output_dir,
         learning_rate=config.learning_rate or 1e-5,
         per_device_train_batch_size=config.batch_size,
@@ -99,7 +124,8 @@ def setup_trainer(
         report_to=["trackio"],
         run_name=run_name,
         loss_type=config.loss_type,
-        use_liger_kernel=config.use_liger_kernel,
+        use_liger_kernel=use_liger,
+        dataloader_pin_memory=(device == "cuda"),
     )
 
     if hasattr(grpo_config, "scale_rewards"):

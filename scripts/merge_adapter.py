@@ -16,6 +16,7 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from lfm_coder.device import detect_device
 from lfm_coder.logging_utils import get_logger
 
 logger = get_logger("merge_adapter")
@@ -29,7 +30,7 @@ upload_repo = str(adapter_path) + "-merged"
 
 logger.info(f"Loading base model: {base_model_name}")
 model = AutoModelForCausalLM.from_pretrained(
-    base_model_name, dtype=torch.bfloat16, device_map="auto"
+    base_model_name, dtype=torch.bfloat16, device_map=detect_device()
 )
 logger.info(f"Loading tokenizer: {base_model_name}")
 tokenizer = AutoTokenizer.from_pretrained(base_model_name)

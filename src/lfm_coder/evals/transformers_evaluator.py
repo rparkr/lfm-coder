@@ -56,7 +56,9 @@ class TransformersEvaluator(Evaluator):
         device: str | torch.device | None = None,
     ):
         if device is None:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            from lfm_coder.device import detect_device
+
+            device = torch.device(detect_device())
 
         super().__init__(
             model_name=model_name,
