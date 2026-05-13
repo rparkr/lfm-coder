@@ -60,9 +60,7 @@ def setup_trainer(
     )
 
     # 3. Load Model and Tokenizer
-    model_kwargs: dict = {
-        "dtype": compute_dtype,
-    }
+    model_kwargs: dict = {"dtype": compute_dtype}
     if use_quant:
         model_kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=config.bnb.load_in_4bit,
