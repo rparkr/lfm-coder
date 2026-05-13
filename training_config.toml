@@ -7,6 +7,11 @@ model_id = "LiquidAI/LFM2.5-1.2B-Instruct"
 # New model repository and name (for uploading to Hugging Face)
 output_dir = "rparkr/LFM2.5-1.2B-Instruct-Coding"
 
+# Hardware backend: "auto" | "cuda" | "mps" | "cpu"
+# device = "auto"
+# Override quantization (default: on for cuda, off for mps/cpu)
+# use_quantization = true
+
 # The trainer will automatically resume training when the same run_name and output_dir are re-used.
 # Set resume_training to true to enable this, or false to start from scratch.
 run_name = "LFM2.5-1.2B-Instruct-Coding"
