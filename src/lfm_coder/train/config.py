@@ -58,6 +58,11 @@ class TrainingConfig(BaseModel):
     # New model repository name for Hugging Face
     output_dir: str
 
+    # Hardware
+    device: str = "auto"  # "auto" | "cuda" | "mps" | "cpu"
+    # None means auto: on for CUDA, off for MPS/CPU.
+    use_quantization: bool | None = None
+
     # Dataset and sampling
     seed: int | None = None
     num_train_records: int = 10_000

@@ -17,9 +17,12 @@ dependencies = [
     # Progress bars
     "tqdm>=4.67.3",
     # Tracking experiments (native integration with TRL)
-    "trackio[gpu,spaces]>=0.18.0",
-    # Transformers-based RL training with QLoRA. Also installs peft, liger-kernel, and bitsandbytes
-    "trl[peft,liger,quantization]>=0.29.0",
+    "trackio[spaces]>=0.18.0",
+    "trackio[gpu]>=0.18.0; sys_platform == 'linux'",
+    # Transformers-based RL training. CUDA-only extras (liger-kernel, bitsandbytes)
+    # are gated to Linux because they pull triton, which has no macOS wheels.
+    "trl[peft]>=0.29.0",
+    "trl[liger,quantization]>=0.29.0; sys_platform == 'linux'",
     # CLI framework for the training module
     "typer>=0.25.0",
 ]
