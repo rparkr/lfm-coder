@@ -17,14 +17,16 @@ def detect_device(preference: str = "auto") -> Device:
     honored if available; otherwise this falls back to cpu.
     """
     if preference not in _VALID:
-        raise ValueError(f"Unknown device preference {preference!r}; expected one of {_VALID}")
+        raise ValueError(
+            f"Unknown device preference {preference!r}; expected one of {_VALID}"
+        )
 
-    if preference == "cuda" or (preference == "auto" and torch.cuda.is_available()):
-        if torch.cuda.is_available():
-            return "cuda"
-    if preference == "mps" or (preference == "auto" and torch.backends.mps.is_available()):
-        if torch.backends.mps.is_available():
-            return "mps"
+    if (preference == "cuda" or preference == "auto") and torch.cuda.is_available():
+        return "cuda"
+    if (
+        preference == "mps" or preference == "auto"
+    ) and torch.backends.mps.is_available():
+        return "mps"
     return "cpu"
 
 
