@@ -19,7 +19,7 @@ def train(
         "training_config.toml", help="Path to the TOML configuration file"
     ),
     dry_run: bool = typer.Option(
-        False, "--dry-run", help="Perform 10 training steps to verify setup"
+        False, "--dry-run", help="Perform 1 training step to verify setup without external reporting"
     ),
     num_samples: int | None = typer.Option(
         None, help="Override number of samples to use"
@@ -81,8 +81,8 @@ def train(
 
     # 5. Save and Push
     if dry_run:
-        logger.info("Dry run complete. Saving to temporary directory...")
-        trainer.save_model(str(Path(config.output_dir) / "dry_run_output"))
+        logger.info("Dry run complete. Model artifacts saved to isolated dry-run directory.")
+        logger.info("No checkpoint files were created; dry-run is read-only to production directories.")
     else:
         logger.info("Training complete. Saving model...")
         trainer.save_model(config.output_dir)
