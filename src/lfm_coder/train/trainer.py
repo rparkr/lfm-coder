@@ -89,7 +89,7 @@ def setup_trainer(
     )
 
     # 5. GRPO Config
-    max_steps = 10 if dry_run else -1
+    max_steps = 1 if dry_run else -1
 
     run_name = config.run_name
     if not run_name:
@@ -101,24 +101,34 @@ def setup_trainer(
         )
         run_name = f"dry-run-{run_name}-{timestamp}"
 
+    # Isolate dry-run output to a dedicated directory
+    output_dir = config.output_dir
+    if dry_run:
+        output_dir = str(
+            Path(config.output_dir)
+            / f".dry_run_{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        )
+
     grpo_config = GRPOConfig(
         optim=optim,
-        output_dir=config.output_dir,
+        output_dir=output_dir,
         learning_rate=config.learning_rate or 1e-5,
-        per_device_train_batch_size=config.batch_size,
-        gradient_accumulation_steps=config.gradient_accumulation_steps,
+        per_device_train_batch_size=1 if dry_run else config.batch_size,
+        gradient_accumulation_steps=1
+        if dry_run
+        else config.gradient_accumulation_steps,
         gradient_checkpointing=True,  # re-calculate activations for backward pass to save memory
         max_completion_length=config.max_completion_length,
         num_generations=config.num_generations,
         temperature=config.temperature,
         eval_strategy="no",
         eval_steps=config.eval_steps,
-        save_strategy="steps" if config.save_steps > 0 else "no",
+        save_strategy="no" if dry_run else ("steps" if config.save_steps > 0 else "no"),
         save_steps=config.save_steps,
         logging_steps=1,
         log_completions=True,
         max_steps=max_steps,
-        report_to=["trackio"],
+        report_to=[] if dry_run else ["trackio"],
         run_name=run_name,
         loss_type=config.loss_type,
         use_liger_kernel=use_liger,
