@@ -1,6 +1,6 @@
 [project]
 name = "lfm-coder"
-version = "0.1.2"
+version = "0.2.0"
 description = "Using GRPO with RLVR, fine-tune LLMs to enhance coding capabilities"
 readme = "README.md"
 authors = [{ name = "Ryan Parker" }]
