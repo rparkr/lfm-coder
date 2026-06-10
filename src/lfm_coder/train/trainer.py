@@ -104,19 +104,16 @@ def setup_trainer(
     # Isolate dry-run output to a dedicated directory
     output_dir = config.output_dir
     if dry_run:
-        output_dir = str(
-            Path(config.output_dir)
-            / f".dry_run_{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d_%H%M%S')}"
-        )
+        output_dir = str(Path(config.output_dir) / run_name)
 
     grpo_config = GRPOConfig(
         optim=optim,
         output_dir=output_dir,
         learning_rate=config.learning_rate or 1e-5,
         per_device_train_batch_size=2 if dry_run else config.batch_size,
-        gradient_accumulation_steps=1
-        if dry_run
-        else config.gradient_accumulation_steps,
+        gradient_accumulation_steps=(
+            1 if dry_run else config.gradient_accumulation_steps
+        ),
         gradient_checkpointing=True,  # re-calculate activations for backward pass to save memory
         max_completion_length=config.max_completion_length,
         num_generations=2 if dry_run else config.num_generations,
