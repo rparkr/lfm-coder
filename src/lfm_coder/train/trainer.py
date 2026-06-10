@@ -113,13 +113,13 @@ def setup_trainer(
         optim=optim,
         output_dir=output_dir,
         learning_rate=config.learning_rate or 1e-5,
-        per_device_train_batch_size=1 if dry_run else config.batch_size,
+        per_device_train_batch_size=2 if dry_run else config.batch_size,
         gradient_accumulation_steps=1
         if dry_run
         else config.gradient_accumulation_steps,
         gradient_checkpointing=True,  # re-calculate activations for backward pass to save memory
         max_completion_length=config.max_completion_length,
-        num_generations=config.num_generations,
+        num_generations=2 if dry_run else config.num_generations,
         temperature=config.temperature,
         eval_strategy="no",
         eval_steps=config.eval_steps,
