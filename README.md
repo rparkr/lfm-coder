@@ -46,7 +46,7 @@ This repository goes beyond basic fine-tuning by implementing a production-grade
 # Getting Started: Training
 
 ### 1. Requirements
-- **Hardware**: Single GPU with 8GB VRAM (e.g., RTX 4060).
+- **Hardware**: Single GPU with at least 8GB VRAM (e.g., RTX 4060).
 - **Tooling**: [uv](https://github.com/astral-sh/uv#installation) installed.
 
 ### 2. Setup
@@ -71,16 +71,25 @@ uv run lfm-coder
 
 You can use the high-performance sandbox in your own projects for safe execution of LLM-generated code.
 
+I recommend using my [`backyard`](https://github.com/rparkr/backyard) project for a minimal installation (one one dependency) so you can incorporate sandboxes into your code.
+
 ### Installation
 ```bash
-uv add lfm-coder  # or pip install lfm-coder
+uv add backard  # or pip install backyard
+
+# Alternatively, you can install the lfm-coder PyPI package,
+# but it has heavy dependencies for LLM training.
+# uv add lfm-coder  # or pip install lfm-coder
 ```
 
 ### Basic Usage
 The `Sandbox` class automatically routes code between Monty (fast) and Docker (full support).
 
 ```python
-from lfm_coder.sandbox import Sandbox
+from backyard import Sandbox
+
+# Or, if you installed lfm-coder:
+# from lfm_coder.sandbox import Sandbox
 
 sandbox = Sandbox()
 
