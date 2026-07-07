@@ -71,7 +71,7 @@ uv run lfm-coder
 
 You can use the high-performance sandbox in your own projects for safe execution of LLM-generated code.
 
-I recommend using my [`backyard`](https://github.com/rparkr/backyard) project for a lightweight, minimal installation to can incorporate sandboxes into your code.
+I recommend using my [`backyard`](https://github.com/rparkr/backyard) project for a lightweight, minimal installation to incorporate sandboxes into your code.
 
 ### Installation
 ```bash
