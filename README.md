@@ -73,7 +73,9 @@ You can use the high-performance sandbox in your own projects for safe execution
 
 I recommend using my [`backyard`](https://github.com/rparkr/backyard) project for a lightweight, minimal installation to incorporate sandboxes into your code.
 
-> ![NOTE] Sandboxes for RLVR vs. Agents
+> ![NOTE]
+> **Sandboxes for RLVR vs. Agents**
+> 
 > The [`backyard`](https://github.com/rparkr/backyard) sandbox package started with support focused on single-turn RLVR, with highly parallel sandbox execution. Install that version using "backyard < 0.2.0".
 > 
 > Starting with v0.2.0, the `backyard` sandbox migrated to support agent harnesses, with stateful sandboxes (not single-turn) that are designed for interactive agent use rather than parallel execution. If you are using the sandboxes for AI agents, then you'll want to install "backyard >= 0.2.0".
