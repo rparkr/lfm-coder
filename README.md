@@ -73,13 +73,18 @@ You can use the high-performance sandbox in your own projects for safe execution
 
 I recommend using my [`backyard`](https://github.com/rparkr/backyard) project for a lightweight, minimal installation to incorporate sandboxes into your code.
 
+> ![NOTE] Sandboxes for RLVR vs. Agents
+> The [`backyard`](https://github.com/rparkr/backyard) sandbox package started with support focused on single-turn RLVR, with highly parallel sandbox execution. Install that version using "backyard < 0.2.0".
+> 
+> Starting with v0.2.0, the `backyard` sandbox migrated to support agent harnesses, with stateful sandboxes (not single-turn) that are designed for interactive agent use rather than parallel execution. If you are using the sandboxes for AI agents, then you'll want to install "backyard >= 0.2.0".
+
 ### Installation
 ```bash
-uv add backard  # or pip install backyard
+uv add "backard < 0.2.0"  # or pip install "backyard < 0.2.0"
 
 # Alternatively, you can install the lfm-coder PyPI package,
-# but it has heavy dependencies for LLM training.
-# uv add lfm-coder  # or pip install lfm-coder
+# but it has heavy dependencies for LLM training, like PyTorch.
+# uv add lfm-coder
 ```
 
 ### Basic Usage
@@ -93,7 +98,7 @@ from backyard import Sandbox
 
 sandbox = Sandbox()
 
-# Batch execution (parallel)
+# Batch execution (parallel), if you installed "backyard < 0.2.0"
 results = sandbox.run(["1+1", "import math; math.sqrt(16)", "print('Hello')"])
 for r in results:
     print(f"Stdout: {r.stdout} | Result: {r.result}")
